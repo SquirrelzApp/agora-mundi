@@ -28,7 +28,16 @@ body {
 }
 
 .fluid-brand-title {
-  font-size: clamp(0.9rem, 0.75rem + 1vw, 1.15rem);
+  font-size: clamp(0.95rem, 0.8rem + 0.8vw, 1.2rem);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* --- Modern Web Guidance: light-dismiss-a-dialog --- */

@@ -1,40 +1,82 @@
+// Agora Mundi Prisma Schema
+// Not: Varsayılan olarak sıfır kurulumlu SQLite ile çalışır (VPS / Railway / Docker / Yerel).
+// Ücretsiz Bulut PostgreSQL'e (Neon / Supabase) geçmek için yalnızca aşağıdaki provider satırını
+// `provider = "postgresql"` yapıp .env içindeki DATABASE_URL değerini değiştirmeniz yeterlidir.
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
   id               String    @id @default(cuid())
   username         String    @unique
+  email            String    @unique
+  passwordHash     String?
+  googleId         String?   @unique
+  avatarColor      String    @default("#1D3557")
   displayName      String
-  title            String    @default("Stratejik Analist")
-  bio              String
-  countryCode      String
+  title            String    @default("Küresel Gündem Yorumcusu")
+  bio              String    @default("")
+  countryCode      String    @default("TR")
   totalLikes       Int       @default(0)
   weeklyLikes      Int       @default(0)
   followerCount    Int       @default(0)
-  globalReachCount Int       @default(1)
+  followingCount   Int       @default(0)
+  globalReachCount Int       @default(0)
   createdAt        DateTime  @default(now())
 
+  sessions         Session[]
   comments         Comment[]
   votes            Vote[]
   followers        Follow[]  @relation("following")
   following        Follow[]  @relation("follower")
 }
 
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 model Country {
   code                String       @id
   nameTr              String
+  nameEn              String       @default("")
+  officialNameTr      String?
+  capital             String?
   region              String
+  subregion           String?
   flagEmoji           String
+  population          Float?
+  areaKm2             Float?
+  currencyCode        String?
+  currencyName        String?
+  currencySymbol      String?
+  languagesJson       String?      // JSON string array of languages
+  callingCode         String?
+  summaryTr           String?      // Wikipedia real country overview
+  wikiUrl             String?
+  thumbnailUrl        String?
+  usdRate             Float?       // 1 USD = X local currency
+  tryRate             Float?       // 1 local currency = Y TRY
   tempo               String       // "HOT" | "MODERATE" | "STABLE"
-  updateIntervalHours Int          // e.g. 3 for IL, 12 for TR, 72 for FI/IS
-  mapX                Float        // SVG X coordinate (0-1000)
-  mapY                Float        // SVG Y coordinate (0-500)
+  updateIntervalHours Int
+  mapX                Float        // Longitude
+  mapY                Float        // Latitude
+  lastSyncedAt        DateTime?    // Null until live agendas are fetched
+  infoSyncedAt        DateTime?    // Null until live country profile is fetched
   lastUpdatedAt       DateTime     @default(now())
 
   agendas             AgendaItem[]
@@ -44,31 +86,44 @@ model AgendaItem {
   id           String    @id @default(cuid())
   countryCode  String
   slot         String    // "A" | "B" | "C"
-  title        String    // Single-sentence plain summary
+  title        String
+  summary      String    @default("")
+  category     String    @default("GÜNDEM")
+  sourcesJson  String    @default("[]") // JSON array of { title, publisher, url, publishedAt }
+  sourceOrigin String    @default("LIVE_RSS_CURATED") // "GEMINI_GROUNDED" | "LIVE_RSS_CURATED"
   isActive     Boolean   @default(true)
   commentCount Int       @default(0)
+  publishedAt  DateTime?
   createdAt    DateTime  @default(now())
   archivedAt   DateTime?
 
   country      Country   @relation(fields: [countryCode], references: [code], onDelete: Cascade)
   comments     Comment[]
+
+  @@index([countryCode, isActive])
 }
 
 model Comment {
   id             String     @id @default(cuid())
   agendaItemId   String
   authorId       String
+  parentId       String?
   content        String
-  sourceUrl      String?    // External reference link allowed
-  stanceTag      String     @default("ANALIZ") // "ANALIZ" | "TEZ" | "ELESTIRI" | "COZUM"
+  sourceUrl      String?
+  stanceTag      String     @default("YORUM") // "YORUM" | "TEZ" | "ANALIZ" | "COZUM" | "ELESTIRI"
   languageCode   String     @default("tr")
   likeCount      Int        @default(0)
+  replyCount     Int        @default(0)
   aiQualityScore Int        @default(80)
   createdAt      DateTime   @default(now())
 
   agendaItem     AgendaItem @relation(fields: [agendaItemId], references: [id], onDelete: Cascade)
   author         User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent         Comment?   @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies        Comment[]  @relation("CommentReplies")
   votes          Vote[]
+
+  @@index([agendaItemId, parentId])
 }
 
 model Vote {

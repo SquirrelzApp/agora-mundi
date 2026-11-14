@@ -1,13 +1,24 @@
 import { feature } from "topojson-client";
 import { geoCentroid } from "d3-geo";
 import worldAtlasData from "world-atlas/countries-110m.json";
+import worldCountriesDataset from "world-countries";
 
 export interface WorldCountryMeta {
-  code: string; // ISO-2 (or custom 2-3 char for N. Cyprus / Kosovo)
-  numericId: string; // 3-digit string from world-atlas or feature name
+  code: string; // ISO-2 (or XK / XK_NCY)
+  numericId: string;
   nameTr: string;
+  nameEn: string;
+  officialNameTr: string;
+  capital: string | null;
   flagEmoji: string;
   region: string;
+  subregion: string | null;
+  areaKm2: number | null;
+  currencyCode: string | null;
+  currencyName: string | null;
+  currencySymbol: string | null;
+  languages: string[];
+  callingCode: string | null;
   tempo: "HOT" | "MODERATE" | "STABLE";
   updateIntervalHours: number;
   coords: [number, number]; // [lon, lat]
@@ -190,6 +201,7 @@ export const NUMERIC_TO_ALPHA2: Record<string, string> = {
 };
 
 const HOT_CODES = new Set([
+  "TR",
   "IL",
   "PS",
   "UA",
@@ -205,7 +217,6 @@ const HOT_CODES = new Set([
 ]);
 
 const MODERATE_CODES = new Set([
-  "TR",
   "DE",
   "FR",
   "GB",
@@ -222,6 +233,7 @@ const MODERATE_CODES = new Set([
   "AF",
   "KP",
   "KR",
+  "JP",
   "VE",
   "AR",
   "MX",
@@ -240,6 +252,67 @@ const COORD_OVERRIDES: Record<string, [number, number]> = {
   FR: [2.4, 46.6],
   NO: [9.0, 61.0],
   GB: [-2.0, 54.0],
+};
+
+const CAPITAL_TR_OVERRIDES: Record<string, string> = {
+  AZ: "Bakü",
+  AT: "Viyana",
+  BE: "Brüksel",
+  BG: "Sofya",
+  CN: "Pekin",
+  CY: "Lefkoşa",
+  CZ: "Prag",
+  DK: "Kopenhag",
+  EG: "Kahire",
+  GB: "Londra",
+  GE: "Tiflis",
+  GR: "Atina",
+  HU: "Budapeşte",
+  IN: "Yeni Delhi",
+  IQ: "Bağdat",
+  IR: "Tahran",
+  IT: "Roma",
+  KW: "Kuveyt",
+  LB: "Beyrut",
+  PL: "Varşova",
+  RO: "Bükreş",
+  RU: "Moskova",
+  SA: "Riyad",
+  RS: "Belgrad",
+  CH: "Bern",
+  SY: "Şam",
+  TR: "Ankara",
+  UA: "Kiev",
+  US: "Washington, D.C.",
+  XK: "Priştine",
+  XK_NCY: "Lefkoşa",
+};
+
+const SUBREGION_TR_MAP: Record<string, string> = {
+  "Western Asia": "Batı Asya",
+  "Central Asia": "Orta Asya",
+  "Southern Asia": "Güney Asya",
+  "Eastern Asia": "Doğu Asya",
+  "South-Eastern Asia": "Güneydoğu Asya",
+  "Northern Europe": "Kuzey Avrupa",
+  "Western Europe": "Batı Avrupa",
+  "Eastern Europe": "Doğu Avrupa",
+  "Southern Europe": "Güney Avrupa",
+  "Southeast Europe": "Güneydoğu Avrupa",
+  "Central Europe": "Orta Avrupa",
+  "North America": "Kuzey Amerika",
+  "South America": "Güney Amerika",
+  "Central America": "Orta Amerika",
+  Caribbean: "Karayipler",
+  "Northern Africa": "Kuzey Afrika",
+  "Western Africa": "Batı Afrika",
+  "Middle Africa": "Orta Afrika",
+  "Eastern Africa": "Doğu Afrika",
+  "Southern Africa": "Güney Afrika",
+  "Australia and New Zealand": "Avustralya ve Yeni Zelanda",
+  Melanesia: "Melanezya",
+  Micronesia: "Mikronezya",
+  Polynesia: "Polinezya",
 };
 
 export function isoToFlagEmoji(code: string): string {
@@ -277,6 +350,7 @@ function classifyRegion(lon: number, lat: number, code: string): string {
       "OM",
       "YE",
       "CY",
+      "XK_NCY",
     ].includes(code)
   ) {
     return "Avrasya & Orta Doğu";
@@ -292,7 +366,19 @@ let cachedCatalog: WorldCountryMeta[] | null = null;
 export function getAllWorldCountries(): WorldCountryMeta[] {
   if (cachedCatalog) return cachedCatalog;
 
-  const trDisplay = new Intl.DisplayNames(["tr"], { type: "region" });
+  const trRegionDisplay = new Intl.DisplayNames(["tr"], { type: "region" });
+  const trCurrencyDisplay = new Intl.DisplayNames(["tr"], { type: "currency" });
+  const trLangDisplay = new Intl.DisplayNames(["tr"], { type: "language" });
+
+  // Index world-countries by ISO alpha-2
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wcByAlpha2 = new Map<string, any>();
+  for (const item of worldCountriesDataset) {
+    if (item.cca2) {
+      wcByAlpha2.set(item.cca2.toUpperCase(), item);
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const topo = worldAtlasData as any;
   const geo = feature(topo, topo.objects.countries) as unknown as {
@@ -316,16 +402,22 @@ export function getAllWorldCountries(): WorldCountryMeta[] {
 
     let code = NUMERIC_TO_ALPHA2[rawId];
     let customNameTr: string | null = null;
+    let customNameEn: string | null = null;
+    let customOfficialTr: string | null = null;
     let customFlag: string | null = null;
 
     if (!code) {
       if (propName === "N. Cyprus") {
         code = "XK_NCY";
         customNameTr = "KKTC (Kuzey Kıbrıs)";
+        customNameEn = "Northern Cyprus";
+        customOfficialTr = "Kuzey Kıbrıs Türk Cumhuriyeti";
         customFlag = "🇹🇷";
       } else if (propName === "Kosovo") {
         code = "XK";
         customNameTr = "Kosova";
+        customNameEn = "Kosovo";
+        customOfficialTr = "Kosova Cumhuriyeti";
         customFlag = "🇽🇰";
       } else {
         continue;
@@ -335,14 +427,90 @@ export function getAllWorldCountries(): WorldCountryMeta[] {
     if (seenCodes.has(code)) continue;
     seenCodes.add(code);
 
+    const wc = wcByAlpha2.get(code);
+
     let nameTr = customNameTr || propName;
     if (!customNameTr) {
       try {
-        nameTr = trDisplay.of(code) || propName;
+        nameTr = trRegionDisplay.of(code) || wc?.translations?.tur?.common || propName;
       } catch {
-        nameTr = propName;
+        nameTr = wc?.translations?.tur?.common || propName;
       }
     }
+
+    const nameEn =
+      customNameEn ||
+      (code === "TR" ? "Turkey" : wc?.name?.common || propName);
+
+    const officialNameTr =
+      customOfficialTr || wc?.translations?.tur?.official || nameTr;
+
+    const capital =
+      CAPITAL_TR_OVERRIDES[code] ||
+      (Array.isArray(wc?.capital) && wc.capital.length > 0
+        ? wc.capital[0]
+        : null);
+
+    let currencyCode: string | null = null;
+    let currencyName: string | null = null;
+    let currencySymbol: string | null = null;
+
+    if (code === "XK_NCY") {
+      currencyCode = "TRY";
+      currencyName = "Türk Lirası";
+      currencySymbol = "₺";
+    } else if (wc?.currencies && typeof wc.currencies === "object") {
+      const cKeys = Object.keys(wc.currencies);
+      if (cKeys.length > 0) {
+        currencyCode = cKeys[0];
+        currencySymbol = wc.currencies[currencyCode]?.symbol || currencyCode;
+        try {
+          currencyName =
+            trCurrencyDisplay.of(currencyCode) ||
+            wc.currencies[currencyCode]?.name ||
+            currencyCode;
+        } catch {
+          currencyName = wc.currencies[currencyCode]?.name || currencyCode;
+        }
+      }
+    }
+
+    const languages: string[] = [];
+    if (code === "XK_NCY") {
+      languages.push("Türkçe");
+    } else if (wc?.languages && typeof wc.languages === "object") {
+      for (const [langCode, langEn] of Object.entries(wc.languages)) {
+        try {
+          const trLang = trLangDisplay.of(langCode);
+          languages.push(trLang ? trLang.charAt(0).toUpperCase() + trLang.slice(1) : String(langEn));
+        } catch {
+          languages.push(String(langEn));
+        }
+      }
+    }
+
+    let callingCode: string | null = null;
+    if (code === "XK_NCY") {
+      callingCode = "+90";
+    } else if (wc?.idd?.root) {
+      const suffix =
+        Array.isArray(wc.idd.suffixes) && wc.idd.suffixes.length === 1
+          ? wc.idd.suffixes[0]
+          : "";
+      callingCode = `${wc.idd.root}${suffix}`;
+    }
+
+    const rawSubregion = wc?.subregion || "";
+    const subregion = rawSubregion
+      ? SUBREGION_TR_MAP[rawSubregion] || rawSubregion
+      : null;
+
+    const areaKm2 =
+      code === "XK_NCY"
+        ? 3355
+        : typeof wc?.area === "number" && wc.area > 0
+        ? wc.area
+        : null;
 
     const centroid = COORD_OVERRIDES[code] || geoCentroid(feat as never);
     const coords: [number, number] = [
@@ -357,14 +525,24 @@ export function getAllWorldCountries(): WorldCountryMeta[] {
       : "STABLE";
 
     const updateIntervalHours =
-      tempo === "HOT" ? 4 : tempo === "MODERATE" ? 16 : 72;
+      tempo === "HOT" ? 1 : tempo === "MODERATE" ? 3 : 6;
 
     results.push({
       code,
       numericId: rawId || propName,
       nameTr,
+      nameEn,
+      officialNameTr,
+      capital,
       flagEmoji: customFlag || isoToFlagEmoji(code),
       region: classifyRegion(coords[0], coords[1], code),
+      subregion,
+      areaKm2,
+      currencyCode,
+      currencyName,
+      currencySymbol,
+      languages: languages.slice(0, 3),
+      callingCode,
       tempo,
       updateIntervalHours,
       coords,
@@ -374,4 +552,12 @@ export function getAllWorldCountries(): WorldCountryMeta[] {
   results.sort((a, b) => a.nameTr.localeCompare(b.nameTr, "tr"));
   cachedCatalog = results;
   return results;
+}
+
+export function getWorldCountryMetaByCode(
+  code: string
+): WorldCountryMeta | undefined {
+  return getAllWorldCountries().find(
+    (c) => c.code.toUpperCase() === code.toUpperCase()
+  );
 }

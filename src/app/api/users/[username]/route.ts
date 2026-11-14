@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -8,15 +9,37 @@ export async function GET(
   { params }: { params: { username: string } }
 ) {
   try {
+    const viewer = await getCurrentUser();
+
     const user = await prisma.user.findUnique({
       where: { username: params.username },
-      include: {
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        title: true,
+        bio: true,
+        countryCode: true,
+        avatarColor: true,
+        totalLikes: true,
+        weeklyLikes: true,
+        followerCount: true,
+        followingCount: true,
+        globalReachCount: true,
+        createdAt: true,
         comments: {
-          orderBy: { likeCount: "desc" },
+          orderBy: [{ likeCount: "desc" }, { createdAt: "desc" }],
+          take: 25,
           include: {
             agendaItem: {
               include: {
-                country: true,
+                country: {
+                  select: {
+                    code: true,
+                    nameTr: true,
+                    flagEmoji: true,
+                  },
+                },
               },
             },
           },
@@ -31,7 +54,19 @@ export async function GET(
       );
     }
 
-    // Aggregate likes per country for the user's "Global Influence / Politik CV" breakdown
+    let viewerIsFollowing = false;
+    if (viewer && viewer.id !== user.id) {
+      const follow = await prisma.follow.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId: viewer.id,
+            followingId: user.id,
+          },
+        },
+      });
+      viewerIsFollowing = Boolean(follow);
+    }
+
     const countryBreakdownMap: Record<
       string,
       {
@@ -59,12 +94,14 @@ export async function GET(
     }
 
     const countryInfluence = Object.values(countryBreakdownMap).sort(
-      (a, b) => b.likes - a.likes
+      (a, b) => b.likes - a.likes || b.commentCount - a.commentCount
     );
 
     return NextResponse.json({
       user,
       countryInfluence,
+      viewerIsFollowing,
+      isSelf: Boolean(viewer && viewer.id === user.id),
     });
   } catch (error) {
     console.error("GET /api/users/[username] error:", error);

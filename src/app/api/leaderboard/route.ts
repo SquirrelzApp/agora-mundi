@@ -3,43 +3,71 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+const PUBLIC_USER_SELECT = {
+  id: true,
+  username: true,
+  displayName: true,
+  title: true,
+  countryCode: true,
+  avatarColor: true,
+  totalLikes: true,
+  weeklyLikes: true,
+  followerCount: true,
+  globalReachCount: true,
+};
+
 export async function GET() {
   try {
-    const weeklyLeaders = await prisma.user.findMany({
-      orderBy: { weeklyLikes: "desc" },
-      take: 6,
-    });
-
-    const mostFollowed = await prisma.user.findMany({
-      orderBy: { followerCount: "desc" },
-      take: 6,
-    });
-
-    const globalStrategists = await prisma.user.findMany({
-      orderBy: [{ globalReachCount: "desc" }, { totalLikes: "desc" }],
-      take: 6,
-    });
-
-    const topTheses = await prisma.comment.findMany({
-      orderBy: { likeCount: "desc" },
-      take: 5,
-      include: {
-        author: true,
-        agendaItem: {
-          include: {
-            country: true,
+    const [
+      weeklyLeaders,
+      mostFollowed,
+      globalStrategists,
+      topTheses,
+      recentRejections,
+      totalComments,
+      totalRejections,
+    ] = await Promise.all([
+      prisma.user.findMany({
+        select: PUBLIC_USER_SELECT,
+        orderBy: [{ weeklyLikes: "desc" }, { globalReachCount: "desc" }],
+        take: 6,
+      }),
+      prisma.user.findMany({
+        select: PUBLIC_USER_SELECT,
+        orderBy: [{ followerCount: "desc" }, { totalLikes: "desc" }],
+        take: 6,
+      }),
+      prisma.user.findMany({
+        select: PUBLIC_USER_SELECT,
+        orderBy: [{ globalReachCount: "desc" }, { totalLikes: "desc" }],
+        take: 6,
+      }),
+      prisma.comment.findMany({
+        where: { parentId: null },
+        orderBy: [{ likeCount: "desc" }, { createdAt: "desc" }],
+        take: 5,
+        include: {
+          author: { select: PUBLIC_USER_SELECT },
+          agendaItem: {
+            include: {
+              country: {
+                select: {
+                  code: true,
+                  nameTr: true,
+                  flagEmoji: true,
+                },
+              },
+            },
           },
         },
-      },
-    });
-
-    const recentRejections = await prisma.moderationLog.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 4,
-    });
-
-    const totalComments = await prisma.comment.count();
-    const totalRejections = await prisma.moderationLog.count();
+      }),
+      prisma.moderationLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 4,
+      }),
+      prisma.comment.count(),
+      prisma.moderationLog.count(),
+    ]);
 
     return NextResponse.json({
       weeklyLeaders,

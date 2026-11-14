@@ -26,28 +26,29 @@ const FALLBACK_RACISM_PATTERNS = [
   /\b(alt\s*ırk|kökünü\s*kazımak|hepsini\s*yakmak|ırkını\s*sikeyim|aşağılık\s*ırk|soykırım\s*müstehak|subhuman|ethnic\s*cleansing\s*now)\b/i,
 ];
 
+export const MIN_COMMENT_LENGTH = 10;
+export const MAX_COMMENT_LENGTH = 1000;
+
 export function validateStructuralRules(
   commentText: string,
   sourceUrl?: string
 ): ModerationResult | null {
   const trimmed = commentText.trim();
 
-  if (trimmed.length < 25) {
+  if (trimmed.length < MIN_COMMENT_LENGTH) {
     return {
       approved: false,
       violationCategory: "CHAR_LIMIT",
-      reason:
-        "Sek tartışma standardı gereği argümanınız en az 25 karakter olmalıdır. Tek kelimelik veya yüzeysel tepkiler yayınlanmaz.",
+      reason: `Yorumunuz en az ${MIN_COMMENT_LENGTH} karakter olmalıdır.`,
       qualityScore: 0,
     };
   }
 
-  if (trimmed.length > 1000) {
+  if (trimmed.length > MAX_COMMENT_LENGTH) {
     return {
       approved: false,
       violationCategory: "CHAR_LIMIT",
-      reason:
-        "Argümanınız 1.000 karakter sınırını aşıyor. Fikrinizi daha öz ve vurucu şekilde ifade edin.",
+      reason: `Yorumunuz ${MAX_COMMENT_LENGTH} karakter sınırını aşıyor.`,
       qualityScore: 0,
     };
   }
@@ -60,7 +61,17 @@ export function validateStructuralRules(
       approved: false,
       violationCategory: "MEDIA_FORBIDDEN",
       reason:
-        "Platformda görsel, fotoğraf, video veya medya dosyası paylaşımı kesinlikle yasaktır. Sadece metin ve harici haber/veri kaynağı linki paylaşabilirsiniz.",
+        "Platformda görsel, fotoğraf veya video paylaşımı kapalıdır. Metin ve harici kaynak/haber bağlantısı paylaşabilirsiniz.",
+      qualityScore: 0,
+    };
+  }
+
+  // Repeated character spam e.g. "aaaaaaaaaaaa"
+  if (/(.)\1{9,}/.test(trimmed)) {
+    return {
+      approved: false,
+      violationCategory: "LOW_EFFORT_SPAM",
+      reason: "Anlamsız karakter tekrarı (spam) tespit edildi.",
       qualityScore: 0,
     };
   }
@@ -68,26 +79,30 @@ export function validateStructuralRules(
   return null;
 }
 
+export interface ModerationContextOptions {
+  isReply?: boolean;
+  parentExcerpt?: string;
+}
+
 export async function moderateComment(
   countryName: string,
   agendaTitle: string,
   commentText: string,
-  sourceUrl?: string
+  sourceUrl?: string,
+  options?: ModerationContextOptions
 ): Promise<ModerationResult> {
-  // 1. Check character limits & media/image prohibition (external links allowed)
   const structuralError = validateStructuralRules(commentText, sourceUrl);
   if (structuralError) {
     return structuralError;
   }
 
-  // 2. Deterministic fast shield for blatant slurs/profanity
   for (const regex of FALLBACK_RACISM_PATTERNS) {
     if (regex.test(commentText)) {
       return {
         approved: false,
         violationCategory: "RACISM_HATE",
         reason:
-          "Irkçılık, etnik nefret söylemi veya bir topluluğu hedef alan ifadeler manifesto gereği kesinlikle yayınlanmaz.",
+          "Irkçılık, etnik nefret söylemi veya bir topluluğu hedef alan ifadeler kesinlikle yayınlanmaz.",
         qualityScore: 5,
       };
     }
@@ -99,26 +114,33 @@ export async function moderateComment(
         approved: false,
         violationCategory: "PROFANITY",
         reason:
-          "Küfür, argo, beddua veya kişisel hakaret tespit edildi. Eleştirinizi argüman ve fikir düzeyinde kurgulayın.",
+          "Küfür, argo veya kişisel hakaret tespit edildi. Lütfen düşüncenizi saygılı bir dille ifade edin.",
         qualityScore: 10,
       };
     }
   }
 
-  // 3. Gemini AI Moderation via @google/genai (gemini-3.5-flash-lite)
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (apiKey) {
     try {
       const ai = new GoogleGenAI({ apiKey });
+      const modelName = process.env.GEMINI_NEWS_MODEL || "gemini-3.5-flash-lite";
+      const contextBlock = options?.isReply
+        ? `\nTür: Başka bir kullanıcı yorumuna ALT YANIT${options.parentExcerpt ? `\nÜst Yorum Özeti: "${options.parentExcerpt}"` : ""}`
+        : "\nTür: Gündem maddesine ana yorum";
+
       const interaction = await ai.interactions.create({
-        model: "gemini-3.5-flash-lite",
-        system_instruction: `Sen elit, sek bir politik ve entelektüel tartışma platformunun baş moderatörüsün.
-Kurallar:
-1. Küfür, argo, kişisel hakaret, ırkçılık, etnik aşağılama, pornografi veya trolleme/spam içeren yorumları KESİNLİKLE reddet (approved: false).
-2. Harici kaynak linkleri (haber, makale, resmi veri) SERBESTTİR.
-3. Sert politik eleştiri, keskin fikirler ve radikal tezler SERBESTTİR; yeter ki üslup temiz ve argüman odaklı olsun.
-4. Yorumun analitik derinliğini ve ikna gücünü 1-100 arasında puanla (qualityScore).`,
-        input: `Ülke: ${countryName}\nGündem Başlığı: ${agendaTitle}\nKullanıcı Yorumu: "${commentText}"`,
+        model: modelName,
+        generation_config: {
+          thinking_level: "low",
+        },
+        system_instruction: `Sen küresel gündem tartışma platformu globeTake'in içerik moderatörüsün.
+KESİN KURALLAR:
+1. YALNIZCA küfür, ağır argo, doğrudan kişisel hakaret, ırkçılık, etnik nefret söylemi veya rastgele klavye tuşlaması / ticari reklam bot spam'i içeren yorumları reddet (approved: false).
+2. Kısa ve net kullanıcı görüşleri (10+ karakter), sohbet tarzı alt yanıtlar (ör. "Kesinlikle katılıyorum...", "Bu noktada farklı düşünüyorum..."), sert politik eleştiriler, sorular, harici haber/makale linkleri ve dolaylı tartışmalar HER ZAMAN ONAYLANMALIDIR (approved: true, violationCategory: "NONE").
+3. Bir yorumu veya alt yanıtı salt "başlıkla doğrudan kelimesi kelimesine örtüşmüyor" veya "kısa katılma/itiraz cümlesi" diye ASLA reddetme (LOW_EFFORT_SPAM yalnızca anlamsız harf dizileri veya reklam botları içindir).
+4. Yorumun katkı ve ifade kalitesini 1-100 arasında puanla (qualityScore).`,
+        input: `Ülke: ${countryName}\nGündem Başlığı: ${agendaTitle}${contextBlock}\nKullanıcı Yorumu: "${commentText}"`,
         response_format: {
           type: "text",
           mime_type: "application/json",
@@ -153,12 +175,11 @@ Kurallar:
     }
   }
 
-  // Heuristic quality score based on analytical structure when offline/no key
   const wordCount = commentText.trim().split(/\s+/).length;
   const hasSourceBonus = sourceUrl ? 6 : 0;
   const computedScore = Math.min(
     98,
-    Math.max(72, 68 + Math.floor(wordCount * 0.6) + hasSourceBonus)
+    Math.max(70, 68 + Math.floor(wordCount * 0.65) + hasSourceBonus)
   );
 
   return {

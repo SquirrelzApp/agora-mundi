@@ -1,15 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { moderateComment } from "@/lib/ai-moderator";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json(
+        {
+          error: "Yorum yapmak veya yanıt vermek için giriş yapmalısınız.",
+          requiresAuth: true,
+        },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const {
       agendaItemId,
-      authorUsername = "karslioglu_strateji",
+      parentId,
       content,
-      stanceTag = "ANALIZ",
+      stanceTag = "YORUM",
       sourceUrl,
       languageCode = "tr",
     } = body;
@@ -21,21 +33,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate optional external source link (harici link serbest, görsel yasak)
     let cleanSourceUrl: string | undefined = undefined;
     if (sourceUrl && typeof sourceUrl === "string" && sourceUrl.trim() !== "") {
       try {
         const parsedUrl = new URL(sourceUrl.trim());
         if (!["http:", "https:"].includes(parsedUrl.protocol)) {
           return NextResponse.json(
-            { error: "Kaynak bağlantısı geçerli bir http/https adresi olmalıdır." },
+            {
+              error:
+                "Kaynak bağlantısı geçerli bir http/https adresi olmalıdır.",
+            },
             { status: 400 }
           );
         }
         cleanSourceUrl = parsedUrl.toString();
       } catch {
         return NextResponse.json(
-          { error: "Geçersiz harici kaynak linki formatı." },
+          { error: "Geçersiz harici kaynak bağlantısı formatı." },
           { status: 400 }
         );
       }
@@ -53,24 +67,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Run Character Limit + Media Prohibition + AI Moderation Shield
+    let resolvedParentId: string | null = null;
+    let parentExcerpt: string | undefined = undefined;
+    if (parentId && typeof parentId === "string") {
+      const parentComment = await prisma.comment.findUnique({
+        where: { id: parentId },
+      });
+      if (!parentComment || parentComment.agendaItemId !== agendaItemId) {
+        return NextResponse.json(
+          { error: "Yanıtlanacak yorum bulunamadı." },
+          { status: 404 }
+        );
+      }
+      // Keep reply hierarchy cleanly 1-level nested under the root thread
+      resolvedParentId = parentComment.parentId || parentComment.id;
+      parentExcerpt = parentComment.content.slice(0, 200);
+    }
+
     const moderation = await moderateComment(
       agendaItem.country.nameTr,
       agendaItem.title,
       content,
-      cleanSourceUrl
+      cleanSourceUrl,
+      {
+        isReply: Boolean(resolvedParentId),
+        parentExcerpt,
+      }
     );
 
     if (!moderation.approved) {
       await prisma.moderationLog.create({
         data: {
-          username: authorUsername,
+          username: currentUser.username,
           countryCode: agendaItem.countryCode,
           rejectedContent: content.slice(0, 300),
           violationCategory: moderation.violationCategory,
           reason:
             moderation.reason ||
-            "Platform manifestosuna aykırı içerik tespit edildi.",
+            "Topluluk kurallarına aykırı içerik tespit edildi.",
         },
       });
 
@@ -84,36 +118,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find or create user
-    let user = await prisma.user.findUnique({
-      where: { username: authorUsername },
-    });
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          username: authorUsername,
-          displayName: authorUsername,
-          title: "Bağımsız Analist",
-          bio: "Sek tartışma ve küresel gündem yorumcusu.",
-          countryCode: "TR",
-        },
-      });
-    }
-
     const newComment = await prisma.comment.create({
       data: {
         agendaItemId,
-        authorId: user.id,
+        authorId: currentUser.id,
+        parentId: resolvedParentId,
         content: content.trim(),
         sourceUrl: cleanSourceUrl,
         stanceTag,
         languageCode,
         aiQualityScore: moderation.qualityScore,
-        likeCount: 1,
+        likeCount: 0,
       },
       include: {
-        author: true,
+        author: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            title: true,
+            countryCode: true,
+            avatarColor: true,
+            followerCount: true,
+            weeklyLikes: true,
+          },
+        },
       },
     });
 
@@ -122,27 +151,36 @@ export async function POST(request: NextRequest) {
       data: { commentCount: { increment: 1 } },
     });
 
+    if (resolvedParentId) {
+      await prisma.comment.update({
+        where: { id: resolvedParentId },
+        data: { replyCount: { increment: 1 } },
+      });
+    }
+
     // Update distinct countries where this user has contributed
     const distinctCountries = await prisma.comment.findMany({
-      where: { authorId: user.id },
+      where: { authorId: currentUser.id },
       select: { agendaItem: { select: { countryCode: true } } },
     });
     const uniqueCountrySet = new Set(
       distinctCountries.map((c) => c.agendaItem.countryCode)
     );
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        totalLikes: { increment: 1 },
-        weeklyLikes: { increment: 1 },
-        globalReachCount: Math.max(user.globalReachCount, uniqueCountrySet.size),
-      },
-    });
+    if (uniqueCountrySet.size !== currentUser.globalReachCount) {
+      await prisma.user.update({
+        where: { id: currentUser.id },
+        data: { globalReachCount: uniqueCountrySet.size },
+      });
+    }
 
     return NextResponse.json({
       approved: true,
-      comment: newComment,
+      comment: {
+        ...newComment,
+        viewerHasLiked: false,
+        replies: [],
+      },
       moderation,
     });
   } catch (error) {
