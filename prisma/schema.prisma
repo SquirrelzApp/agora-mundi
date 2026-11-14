@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String    @id @default(cuid())
+  username         String    @unique
+  displayName      String
+  title            String    @default("Stratejik Analist")
+  bio              String
+  countryCode      String
+  totalLikes       Int       @default(0)
+  weeklyLikes      Int       @default(0)
+  followerCount    Int       @default(0)
+  globalReachCount Int       @default(1)
+  createdAt        DateTime  @default(now())
+
+  comments         Comment[]
+  votes            Vote[]
+  followers        Follow[]  @relation("following")
+  following        Follow[]  @relation("follower")
+}
+
+model Country {
+  code                String       @id
+  nameTr              String
+  region              String
+  flagEmoji           String
+  tempo               String       // "HOT" | "MODERATE" | "STABLE"
+  updateIntervalHours Int          // e.g. 3 for IL, 12 for TR, 72 for FI/IS
+  mapX                Float        // SVG X coordinate (0-1000)
+  mapY                Float        // SVG Y coordinate (0-500)
+  lastUpdatedAt       DateTime     @default(now())
+
+  agendas             AgendaItem[]
+}
+
+model AgendaItem {
+  id           String    @id @default(cuid())
+  countryCode  String
+  slot         String    // "A" | "B" | "C"
+  title        String    // Single-sentence plain summary
+  isActive     Boolean   @default(true)
+  commentCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+  archivedAt   DateTime?
+
+  country      Country   @relation(fields: [countryCode], references: [code], onDelete: Cascade)
+  comments     Comment[]
+}
+
+model Comment {
+  id             String     @id @default(cuid())
+  agendaItemId   String
+  authorId       String
+  content        String
+  sourceUrl      String?    // External reference link allowed
+  stanceTag      String     @default("ANALIZ") // "ANALIZ" | "TEZ" | "ELESTIRI" | "COZUM"
+  languageCode   String     @default("tr")
+  likeCount      Int        @default(0)
+  aiQualityScore Int        @default(80)
+  createdAt      DateTime   @default(now())
+
+  agendaItem     AgendaItem @relation(fields: [agendaItemId], references: [id], onDelete: Cascade)
+  author         User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  votes          Vote[]
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  commentId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower    User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+}
+
+model ModerationLog {
+  id                String   @id @default(cuid())
+  username          String
+  countryCode       String
+  rejectedContent   String
+  violationCategory String
+  reason            String
+  createdAt         DateTime @default(now())
+}

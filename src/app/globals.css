@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-paper: #f3f4f6;
+  --bg-surface: #ffffff;
+  --bg-muted: #e5e7eb;
+  --border-subtle: transparent;
+  --text-ink: #111827;
+  --text-slate: #4b5563;
+}
+
+html,
+body {
+  max-inline-size: 100dvw;
+  min-block-size: 100dvh;
+  overflow-x: clip;
+  background-color: var(--bg-paper);
+  background-image: radial-gradient(
+    circle at 50% 18%,
+    #ffffff 0%,
+    #f1f3f6 68%
+  );
+  color: var(--text-ink);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+.fluid-brand-title {
+  font-size: clamp(0.9rem, 0.75rem + 1vw, 1.15rem);
+}
+
+/* --- Modern Web Guidance: light-dismiss-a-dialog --- */
+dialog::backdrop {
+  background-color: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(6px);
+}
+
+/* --- Modern Web Guidance: responsive-table --- */
+.table-wrapper {
+  overflow: auto;
+  max-inline-size: 100%;
+  max-block-size: min(520px, 80dvh);
+  container-type: inline-size;
+}
+
+.responsive-data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+}
+
+.responsive-data-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+}
+
+.responsive-data-table tbody th {
+  position: sticky;
+  inset-inline-start: 0;
+  background: var(--bg-surface);
+}
+
+@container (width < 600px) {
+  .responsive-data-table,
+  .responsive-data-table thead,
+  .responsive-data-table tbody,
+  .responsive-data-table tr,
+  .responsive-data-table th,
+  .responsive-data-table td {
+    display: block;
+  }
+
+  .responsive-data-table thead {
+    display: none;
+  }
+
+  .responsive-data-table tr {
+    margin-block-end: 0.75rem;
+    border-radius: 1rem;
+    background: var(--bg-surface);
+  }
+
+  .responsive-data-table tbody th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 2;
+    background: var(--bg-surface);
+  }
+
+  .responsive-data-table td:nth-child(2)::before {
+    content: var(--label-2) ": ";
+    font-weight: 600;
+  }
+
+  .responsive-data-table td:nth-child(3)::before {
+    content: var(--label-3) ": ";
+    font-weight: 600;
+  }
+
+  .responsive-data-table td:nth-child(4)::before {
+    content: var(--label-4) ": ";
+    font-weight: 600;
+  }
+}
+
+/* --- Modern Web Guidance: validate-input-after-interaction --- */
+.field .rules-list {
+  color: #646b75;
+  transition: color 0.15s ease;
+}
+
+.field .error-msg {
+  display: none;
+  color: #b91c1c;
+  font-size: 0.8125rem;
+  margin-top: 0.375rem;
+}
+
+.field textarea:user-invalid,
+.field textarea.user-invalid-fallback,
+.field input:user-invalid,
+.field input.user-invalid-fallback {
+  background-color: #fef2f2;
+  box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.25);
+}
+
+.field textarea:user-invalid + .error-msg,
+.field textarea.user-invalid-fallback + .error-msg,
+.field input:user-invalid + .error-msg,
+.field input.user-invalid-fallback + .error-msg {
+  display: block;
+}
+
+.field:has(textarea:user-invalid) .rules-list,
+.field:has(textarea.user-invalid-fallback) .rules-list {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.field textarea:user-valid,
+.field textarea.user-valid-fallback,
+.field input:user-valid,
+.field input.user-valid-fallback {
+  box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.2);
+}
