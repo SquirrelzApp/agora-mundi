@@ -162,9 +162,15 @@ export function cleanHeadlineAndPublisher(
   return { cleanTitle: decoded, publisher: fallbackPublisher };
 }
 
-export function parseRssXmlItems(xml: string): VerifiedNewsSource[] {
+export function parseRssXmlItems(
+  xml: string,
+  maxAgeDays = 7
+): VerifiedNewsSource[] {
   const results: VerifiedNewsSource[] = [];
   const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/gi);
+  const nowMs = Date.now();
+  const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+  const maxFutureMs = 24 * 60 * 60 * 1000;
 
   for (const match of itemMatches) {
     const block = match[1];
@@ -189,10 +195,15 @@ export function parseRssXmlItems(xml: string): VerifiedNewsSource[] {
     const url = decodeXmlEntities(linkMatch[1]);
     if (!url.startsWith("http")) continue;
 
-    let publishedIso = new Date().toISOString();
+    let publishedIso = new Date(nowMs).toISOString();
     if (pubDateMatch) {
       const parsedDate = new Date(decodeXmlEntities(pubDateMatch[1]));
-      if (!Number.isNaN(parsedDate.getTime())) {
+      const ts = parsedDate.getTime();
+      if (!Number.isNaN(ts)) {
+        // Hard freshness gate: drop stale archival articles or bogus future dates
+        if (nowMs - ts > maxAgeMs || ts - nowMs > maxFutureMs) {
+          continue;
+        }
         publishedIso = parsedDate.toISOString();
       }
     }
@@ -336,20 +347,27 @@ export function clusterNewsIntoDistinctTopics(
   const nowMs = Date.now();
 
   const scoredClusters: NewsTopicCluster[] = clusters.map((c) => {
+    // Sort items newest-first so primaryTitle & sources always highlight the freshest coverage
+    const sortedItems = [...c.items].sort(
+      (a, b) =>
+        (new Date(b.publishedAt).getTime() || 0) -
+        (new Date(a.publishedAt).getTime() || 0)
+    );
     const preferred =
-      c.items.find((i) => i.title.length >= 25) || c.items[0];
+      sortedItems.find((i) => i.title.length >= 25) || sortedItems[0];
 
     const newestMs = Math.max(
-      ...c.items.map((i) => new Date(i.publishedAt).getTime() || 0)
+      ...sortedItems.map((i) => new Date(i.publishedAt).getTime() || 0)
     );
     const ageHours = Math.max(0, (nowMs - newestMs) / (1000 * 60 * 60));
-    const recencyBonus = Math.max(0, 12 - Math.min(12, ageHours / 8));
-    const multiSourceBonus = Math.min(4, c.items.length) * 3.2;
+    // Strong recency priority: breaking news from last 24-48h clearly outranks older clusters
+    const recencyBonus = Math.max(0, 20 - ageHours * 0.25);
+    const multiSourceBonus = Math.min(4, sortedItems.length) * 2.5;
 
     // Deduplicate publishers in displayed sources (up to 3)
     const uniqueSources: VerifiedNewsSource[] = [];
     const seenPubs = new Set<string>();
-    for (const src of c.items) {
+    for (const src of sortedItems) {
       const key = src.publisher.toLowerCase();
       if (!seenPubs.has(key)) {
         seenPubs.add(key);
@@ -357,13 +375,13 @@ export function clusterNewsIntoDistinctTopics(
       }
       if (uniqueSources.length >= 3) break;
     }
-    if (uniqueSources.length === 0) uniqueSources.push(c.items[0]);
+    if (uniqueSources.length === 0) uniqueSources.push(sortedItems[0]);
 
     return {
       primaryTitle: preferred.title,
       primaryLang: "en",
       categoryHint: inferAgendaCategory(
-        c.items.map((x) => x.title).join(" ")
+        sortedItems.map((x) => x.title).join(" ")
       ),
       publishedAt: new Date(newestMs || nowMs).toISOString(),
       score: multiSourceBonus + recencyBonus,
@@ -392,34 +410,55 @@ async function fetchTextFast(url: string, timeoutMs = 4500): Promise<string> {
   return res.text();
 }
 
+export function buildCountryGoogleNewsQuery(
+  countryCode: string,
+  countryName: string,
+  whenWindow: "3d" | "7d" | "21d" = "3d"
+): string {
+  const code = countryCode.toUpperCase();
+  const override = COUNTRY_QUERY_OVERRIDES[code];
+  const baseQuery =
+    override?.enQuery ||
+    `"${countryName}" (government OR economy OR parliament OR minister OR president OR policy OR crisis)`;
+  // Always enforce the recency window even for override queries
+  return `${baseQuery} when:${whenWindow}`;
+}
+
 export async function fetchCountryLiveNewsClusters(
   countryCode: string,
   countryName: string
 ): Promise<NewsTopicCluster[]> {
-  const code = countryCode.toUpperCase();
-  const override = COUNTRY_QUERY_OVERRIDES[code];
+  const freshQuery3d = buildCountryGoogleNewsQuery(
+    countryCode,
+    countryName,
+    "3d"
+  );
 
-  const enRecentQuery =
-    override?.enQuery ||
-    `"${countryName}" (government OR economy OR parliament OR minister OR president OR policy OR crisis) when:7d`;
-  const enBroadQuery = `"${countryName}" when:30d`;
-
-  const urlsToFetch: string[] = [
-    `https://news.google.com/rss/search?q=${encodeURIComponent(
-      enRecentQuery
-    )}&hl=en-US&gl=US&ceid=US:en`,
-    `https://news.google.com/rss/search?q=${encodeURIComponent(
-      enRecentQuery
-    )}&hl=en-GB&gl=GB&ceid=GB:en`,
-    `https://www.bing.com/news/search?q=${encodeURIComponent(
-      `${countryName} news`
-    )}&format=rss&setlang=en-US`,
+  const primaryFeeds: Array<{ url: string; maxAgeDays: number }> = [
+    {
+      url: `https://news.google.com/rss/search?q=${encodeURIComponent(
+        freshQuery3d
+      )}&hl=en-US&gl=US&ceid=US:en`,
+      maxAgeDays: 4,
+    },
+    {
+      url: `https://news.google.com/rss/search?q=${encodeURIComponent(
+        freshQuery3d
+      )}&hl=en-GB&gl=GB&ceid=GB:en`,
+      maxAgeDays: 4,
+    },
+    {
+      url: `https://www.bing.com/news/search?q=${encodeURIComponent(
+        `${countryName} news`
+      )}&format=rss&setlang=en-US&qft=interval%3d%227%22`,
+      maxAgeDays: 7,
+    },
   ];
 
   const settled = await Promise.allSettled(
-    urlsToFetch.map(async (url) => {
-      const xml = await fetchTextFast(url, 4500);
-      return parseRssXmlItems(xml);
+    primaryFeeds.map(async (feed) => {
+      const xml = await fetchTextFast(feed.url, 4500);
+      return parseRssXmlItems(xml, feed.maxAgeDays);
     })
   );
 
@@ -434,9 +473,14 @@ export async function fetchCountryLiveNewsClusters(
   const gnewsKey = process.env.GNEWS_API_KEY;
   if (gnewsKey) {
     try {
+      const fromIso = new Date(
+        Date.now() - 7 * 24 * 60 * 60 * 1000
+      ).toISOString();
       const gUrl = `https://gnews.io/api/v4/search?q=${encodeURIComponent(
         countryName
-      )}&lang=en&max=6&apikey=${encodeURIComponent(gnewsKey)}`;
+      )}&lang=en&from=${encodeURIComponent(fromIso)}&max=6&apikey=${encodeURIComponent(
+        gnewsKey
+      )}`;
       const rawJson = await fetchTextFast(gUrl, 3500);
       const parsed = JSON.parse(rawJson);
       if (Array.isArray(parsed?.articles)) {
@@ -457,16 +501,37 @@ export async function fetchCountryLiveNewsClusters(
     }
   }
 
-  // For smaller nations with sparse 7-day news, run a broader 30-day fallback immediately
+  // Stage 2: 7-day fallback if 3-day feeds returned fewer than 6 items
   if (allItems.length < 6) {
     try {
-      const broadXml = await fetchTextFast(
+      const query7d = buildCountryGoogleNewsQuery(
+        countryCode,
+        countryName,
+        "7d"
+      );
+      const xml7d = await fetchTextFast(
         `https://news.google.com/rss/search?q=${encodeURIComponent(
-          enBroadQuery
+          query7d
         )}&hl=en-US&gl=US&ceid=US:en`,
         4500
       );
-      allItems = [...allItems, ...parseRssXmlItems(broadXml)];
+      allItems = [...allItems, ...parseRssXmlItems(xml7d, 7)];
+    } catch {
+      // ignore
+    }
+  }
+
+  // Stage 3: Broader 21-day fallback ONLY for smaller nations with sparse 7-day coverage
+  if (allItems.length < 4) {
+    try {
+      const broadQuery = `"${countryName}" when:21d`;
+      const broadXml = await fetchTextFast(
+        `https://news.google.com/rss/search?q=${encodeURIComponent(
+          broadQuery
+        )}&hl=en-US&gl=US&ceid=US:en`,
+        4500
+      );
+      allItems = [...allItems, ...parseRssXmlItems(broadXml, 21)];
     } catch {
       // ignore
     }

@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildCountryGoogleNewsQuery,
   cleanHeadlineAndPublisher,
   clusterNewsIntoDistinctTopics,
   parseRssXmlItems,
@@ -54,6 +55,13 @@ describe("World Countries Catalog (English)", () => {
 });
 
 describe("News Intelligence & Jaccard Topic Clustering", () => {
+  it("always enforces recency window even on overridden country queries", () => {
+    const usQ = buildCountryGoogleNewsQuery("US", "United States", "3d");
+    const trQ = buildCountryGoogleNewsQuery("TR", "Turkey", "7d");
+    assert.ok(usQ.endsWith("when:3d"), `US query missing when:3d: ${usQ}`);
+    assert.ok(trQ.endsWith("when:7d"), `TR query missing when:7d: ${trQ}`);
+  });
+
   it("extracts clean title and publisher from RSS title suffixes", () => {
     const res = cleanHeadlineAndPublisher(
       "Central Bank announces interest rate decision - Reuters"
@@ -65,23 +73,31 @@ describe("News Intelligence & Jaccard Topic Clustering", () => {
     assert.equal(res.publisher, "Reuters");
   });
 
-  it("parses valid RSS XML items and filters trivial gossip/sports noise", () => {
+  it("parses valid RSS XML items, filters trivial gossip/sports noise, and drops stale articles beyond maxAgeDays", () => {
+    const freshDate = new Date(Date.now() - 2 * 60 * 60 * 1000).toUTCString();
+    const staleDate = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toUTCString();
     const sampleXml = `
       <rss><channel>
         <item>
           <title>Central Bank announces major inflation reform package - Reuters</title>
           <link>https://www.reuters.com/world/economy-1</link>
-          <pubDate>Sat, 14 Nov 2026 09:00:00 GMT</pubDate>
+          <pubDate>${freshDate}</pubDate>
           <source url="https://www.reuters.com">Reuters</source>
+        </item>
+        <item>
+          <title>Supreme Court issued historic ruling two months ago - BBC</title>
+          <link>https://www.bbc.com/news/old-story</link>
+          <pubDate>${staleDate}</pubDate>
+          <source url="https://www.bbc.com">BBC</source>
         </item>
         <item>
           <title>Champions League match highlights and transfer rumors - SportTV</title>
           <link>https://example.com/sports</link>
-          <pubDate>Sat, 14 Nov 2026 09:05:00 GMT</pubDate>
+          <pubDate>${freshDate}</pubDate>
         </item>
       </channel></rss>
     `;
-    const items = parseRssXmlItems(sampleXml);
+    const items = parseRssXmlItems(sampleXml, 7);
     assert.equal(items.length, 1);
     assert.equal(items[0].publisher, "Reuters");
     assert.equal(inferAgendaCategory(items[0].title), "ECONOMY");

@@ -489,7 +489,7 @@ export async function syncBatchCountriesToDb(
             const lines = top
               .map(
                 (c, idx) =>
-                  `  [${idx}] (${c.categoryHint}) "${c.primaryTitle}" — ${c.sources
+                  `  [${idx}] (${c.categoryHint} | ${c.publishedAt.slice(0, 10)}) "${c.primaryTitle}" — ${c.sources
                     .map((s) => s.publisher)
                     .slice(0, 2)
                     .join(", ")}`
@@ -508,10 +508,11 @@ export async function syncBatchCountriesToDb(
 For each country provided, use its live news clusters to prepare the 3 most important, COMPLETELY DISTINCT real-world agendas (items: exactly 3 elements) in crisp, neutral English.
 Rules:
 1. NEVER fabricate facts; stay strictly faithful to the provided live news clusters.
-2. Each "title" must be a single-sentence, clickbait-free, neutral English headline (40-120 characters).
-3. Each "summary" must be a 1-2 sentence neutral background brief.
-4. "category": POLITICS, ECONOMY, SECURITY, DIPLOMACY, SOCIETY, TECHNOLOGY, or ENVIRONMENT.
-5. "clusterIndex": matching cluster index (0-6) for that country.`,
+2. ALWAYS prioritize the most recent breaking developments (latest dates first).
+3. Each "title" must be a single-sentence, clickbait-free, neutral English headline (40-120 characters).
+4. Each "summary" must be a 1-2 sentence neutral background brief.
+5. "category": POLITICS, ECONOMY, SECURITY, DIPLOMACY, SOCIETY, TECHNOLOGY, or ENVIRONMENT.
+6. "clusterIndex": matching cluster index (0-6) for that country.`,
           input: batchPrompt,
           response_format: {
             type: "text",
