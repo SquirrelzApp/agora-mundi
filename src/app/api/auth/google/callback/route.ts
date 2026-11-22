@@ -1,21 +1,50 @@
+import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   AVATAR_COLORS,
+  OAUTH_STATE_COOKIE,
   createUserSession,
   normalizeUsername,
 } from "@/lib/auth";
 
+function redirectWithClearState(url: string): NextResponse {
+  const res = NextResponse.redirect(url);
+  res.cookies.delete(OAUTH_STATE_COOKIE);
+  return res;
+}
+
 export async function GET(request: NextRequest) {
+  const origin = (
+    process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
+  ).replace(/\/$/, "");
+
+  const oauthError = request.nextUrl.searchParams.get("error");
+  if (oauthError) {
+    return redirectWithClearState(`${origin}/?authError=google_cancelled`);
+  }
+
   const code = request.nextUrl.searchParams.get("code");
+  const returnedState = request.nextUrl.searchParams.get("state") || "";
+  const storedState = request.cookies.get(OAUTH_STATE_COOKIE)?.value || "";
+
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const origin =
-    process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
-  const redirectUri = `${origin.replace(/\/$/, "")}/api/auth/google/callback`;
+  const redirectUri = `${origin}/api/auth/google/callback`;
 
   if (!code || !clientId || !clientSecret) {
-    return NextResponse.redirect(`${origin}/?authError=google_config`);
+    return redirectWithClearState(`${origin}/?authError=google_config`);
+  }
+
+  // Verify CSRF state token in constant time
+  const stateA = Buffer.from(returnedState);
+  const stateB = Buffer.from(storedState);
+  if (
+    stateA.length === 0 ||
+    stateA.length !== stateB.length ||
+    !timingSafeEqual(stateA, stateB)
+  ) {
+    return redirectWithClearState(`${origin}/?authError=google_state`);
   }
 
   try {
@@ -32,7 +61,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!tokenRes.ok) {
-      return NextResponse.redirect(`${origin}/?authError=google_token`);
+      return redirectWithClearState(`${origin}/?authError=google_token`);
     }
 
     const tokenData = await tokenRes.json();
@@ -44,16 +73,21 @@ export async function GET(request: NextRequest) {
     );
 
     if (!userRes.ok) {
-      return NextResponse.redirect(`${origin}/?authError=google_profile`);
+      return redirectWithClearState(`${origin}/?authError=google_profile`);
     }
 
     const profile = await userRes.json();
     const googleId = String(profile.id || "");
     const email = String(profile.email || "").toLowerCase();
+    const verifiedEmail = profile.verified_email !== false;
     const name = String(profile.name || email.split("@")[0] || "Member");
 
     if (!googleId || !email) {
-      return NextResponse.redirect(`${origin}/?authError=google_email`);
+      return redirectWithClearState(`${origin}/?authError=google_email`);
+    }
+
+    if (!verifiedEmail) {
+      return redirectWithClearState(`${origin}/?authError=google_unverified`);
     }
 
     let user = await prisma.user.findFirst({
@@ -89,9 +123,9 @@ export async function GET(request: NextRequest) {
     }
 
     await createUserSession(user.id);
-    return NextResponse.redirect(`${origin}/`);
+    return redirectWithClearState(`${origin}/`);
   } catch (error) {
     console.error("GET /api/auth/google/callback error:", error);
-    return NextResponse.redirect(`${origin}/?authError=google_failed`);
+    return redirectWithClearState(`${origin}/?authError=google_failed`);
   }
 }

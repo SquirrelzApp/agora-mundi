@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 const scrypt = promisify(scryptCb);
 
 export const SESSION_COOKIE_NAME = "agora_session";
+export const OAUTH_STATE_COOKIE = "agora_oauth_state";
 const SESSION_TTL_DAYS = 30;
 
 export const AVATAR_COLORS = [

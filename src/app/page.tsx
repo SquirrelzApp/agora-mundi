@@ -88,11 +88,27 @@ export default function AgoraMundiPage() {
       const params = new URLSearchParams(window.location.search);
       const urlCountry = params.get("country");
       const urlSlot = params.get("slot");
+      const authError = params.get("authError");
       if (urlCountry) {
         setSelectedCode(urlCountry.toUpperCase());
         if (urlSlot && ["A", "B", "C"].includes(urlSlot.toUpperCase())) {
           setSelectedSlot(urlSlot.toUpperCase());
         }
+      }
+      if (authError) {
+        const errorMessages: Record<string, string> = {
+          google_cancelled: "Google sign-in was cancelled. You can try again anytime.",
+          google_state: "Security check expired during Google sign-in. Please try again.",
+          google_unverified: "Your Google account email must be verified to sign in.",
+          google_config: "Google sign-in is not configured on this server yet.",
+        };
+        setAuthContextHint(
+          errorMessages[authError] || "Google sign-in failed. Please try again."
+        );
+        setAuthModalMode("login");
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete("authError");
+        window.history.replaceState({}, "", cleanUrl.toString());
       }
     } catch {
       // ignore
