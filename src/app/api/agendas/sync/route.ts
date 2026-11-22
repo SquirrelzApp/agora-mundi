@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncCountryAgendasToDb } from "@/lib/ai-agenda-curator";
 import { ensureCountryIntelligence } from "@/lib/country-intel";
+import { requireCronOrAdminAuth } from "@/lib/request-guard";
 
 /**
- * Forces a live refresh of a selected country's top 3 English agendas and profile
+ * Forces a live refresh of a selected country's top 3 English agendas and profile.
+ * Protected by CRON_SECRET (Bearer token or x-cron-secret header).
  */
 export async function POST(request: NextRequest) {
+  const authError = requireCronOrAdminAuth(request);
+  if (authError) return authError;
+
   try {
     const body = await request.json();
     const countryCode = String(body.countryCode || "US").toUpperCase();

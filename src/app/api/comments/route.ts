@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { moderateComment } from "@/lib/ai-moderator";
 import { getCurrentUser } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/request-guard";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +14,19 @@ export async function POST(request: NextRequest) {
           requiresAuth: true,
         },
         { status: 401 }
+      );
+    }
+
+    const limit = checkRateLimit(`comment:${currentUser.id}`, 6, 60_000);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        {
+          error: `You are posting too quickly. Please wait ${limit.retryAfterSec}s before commenting again.`,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(limit.retryAfterSec) },
+        }
       );
     }
 

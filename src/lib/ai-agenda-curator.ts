@@ -36,18 +36,149 @@ const AGENDA_CATEGORIES = [
   "ENVIRONMENT",
 ] as const;
 
+const VALID_CATEGORY_SET = new Set<string>(AGENDA_CATEGORIES);
+
+function getNewsGeminiApiKey(): string | undefined {
+  return (
+    process.env.GEMINI_NEWS_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY
+  );
+}
+
+function getNewsGeminiModel(): string {
+  return process.env.GEMINI_NEWS_MODEL || "gemini-3.5-flash-lite";
+}
+
 function polishHeadline(raw: string): string {
   const cleaned = raw
     .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
     .replace(/\s+/g, " ")
+    .replace(/\.+$/, "")
     .trim();
   if (!cleaned) return "";
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 
+function normalizeCategory(raw: string | undefined, fallbackText: string): string {
+  const upper = (raw || "").trim().toUpperCase();
+  if (VALID_CATEGORY_SET.has(upper)) return upper;
+  return inferAgendaCategory(fallbackText);
+}
+
+/**
+ * Formats each cluster for Gemini with concrete date + up to 2 real headlines + publishers.
+ * Intentionally omits regex categoryHint so Gemini classifies accurately from meaning alone.
+ */
+function formatClusterLineForPrompt(c: NewsTopicCluster, idx: number): string {
+  const dateStr = c.publishedAt.slice(0, 10);
+  const altSource = c.sources.find(
+    (s) => s.title.toLowerCase() !== c.primaryTitle.toLowerCase()
+  );
+  const pubList = c.sources
+    .map((s) => s.publisher)
+    .slice(0, 3)
+    .join(", ");
+  const altPart = altSource ? ` | Also: "${altSource.title}"` : "";
+  return `  [${idx}] (${dateStr}) "${c.primaryTitle}"${altPart} — Sources: ${pubList}`;
+}
+
+const EDITORIAL_CATEGORY_GUIDE = `Category definitions (choose the single best fit):
+- POLITICS: elections, parliament, courts, legislation, cabinet, domestic political disputes
+- ECONOMY: trade, tariffs, inflation, central banks, GDP, budgets, labor/union strikes, energy markets
+- SECURITY: war, military, defense, police, borders, counterterrorism, armed conflict
+- DIPLOMACY: bilateral/multilateral visits, summits, treaties, foreign policy, UN/EU/NATO, sanctions
+- TECHNOLOGY: AI, semiconductors, cyberattacks/cybersecurity, space, telecom, digital policy
+- ENVIRONMENT: climate summits (COP), storms, earthquakes, floods, wildfires, energy transition, emissions
+- SOCIETY: public health, education, migration, culture, accidents/disasters, civic life`;
+
+/**
+ * Guarantees valid, bounds-checked, non-duplicate cluster assignments across slots A/B/C.
+ */
+export function resolveDistinctClusterMatches<T>(
+  requestedIndices: number[],
+  clusters: T[]
+): Array<T | undefined> {
+  if (clusters.length === 0) {
+    return requestedIndices.map(() => undefined);
+  }
+  const used = new Set<number>();
+  return requestedIndices.map((rawIdx, pos) => {
+    const candidate =
+      Number.isInteger(rawIdx) && rawIdx >= 0 && rawIdx < clusters.length
+        ? rawIdx
+        : pos < clusters.length
+        ? pos
+        : 0;
+
+    if (!used.has(candidate)) {
+      used.add(candidate);
+      return clusters[candidate];
+    }
+
+    // Pick the highest-priority unused cluster to avoid duplicating the same story
+    for (let i = 0; i < clusters.length; i++) {
+      if (!used.has(i)) {
+        used.add(i);
+        return clusters[i];
+      }
+    }
+
+    return clusters[candidate];
+  });
+}
+
+function isRetryableGeminiError(err: unknown): boolean {
+  const msg = String(err instanceof Error ? err.message : err).toLowerCase();
+  const status =
+    typeof err === "object" && err !== null && "status" in err
+      ? Number((err as { status?: unknown }).status)
+      : 0;
+  if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {
+    return true;
+  }
+  return /429|500|502|503|504|rate limit|resource_exhausted|overloaded|timeout|econnreset|fetch failed|unavailable/i.test(
+    msg
+  );
+}
+
+async function callGeminiWithRetry<T>(
+  fn: () => Promise<T>,
+  timeoutMs: number,
+  maxAttempts = 3
+): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([
+        fn(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`Gemini request timeout after ${timeoutMs}ms`)),
+            timeoutMs
+          );
+        }),
+      ]);
+      if (timer) clearTimeout(timer);
+      return result;
+    } catch (err) {
+      if (timer) clearTimeout(timer);
+      lastErr = err;
+      if (attempt < maxAttempts && isRetryableGeminiError(err)) {
+        const delayMs = attempt * 1500 + Math.floor(Math.random() * 500);
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 /**
  * Live English News Clusters + Gemini 3.5 Flash-Lite (if configured) / Zero-Key Live RSS Curator.
- * Zero fabricated/hardcoded templates; 100% grounded in live English news sources (never translated to Turkish).
+ * Zero fabricated/hardcoded templates; 100% grounded in live English news sources.
  */
 export async function curateLiveCountryAgendas(
   countryCode: string,
@@ -58,7 +189,7 @@ export async function curateLiveCountryAgendas(
     countryName
   );
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  const apiKey = getNewsGeminiApiKey();
 
   // 1. Gemini 3.5 Flash-Lite Grounded Synthesis (when API key is configured)
   if (apiKey) {
@@ -66,66 +197,67 @@ export async function curateLiveCountryAgendas(
       const ai = new GoogleGenAI({ apiKey });
       const topClusters = clusters.slice(0, 8);
       const clusterDigest = topClusters
-        .map(
-          (c, idx) =>
-            `[${idx}] (${c.categoryHint}) "${c.primaryTitle}" — Sources: ${c.sources
-              .map((s) => `${s.publisher} (${s.publishedAt.slice(0, 10)})`)
-              .join(", ")}`
-        )
+        .map((c, idx) => formatClusterLineForPrompt(c, idx))
         .join("\n");
 
       const useSearchTool =
         topClusters.length === 0 &&
         process.env.GEMINI_ENABLE_PAID_SEARCH === "true";
-      const modelName = process.env.GEMINI_NEWS_MODEL || "gemini-3.5-flash-lite";
+      const modelName = getNewsGeminiModel();
 
-      const interaction = await ai.interactions.create({
-        model: modelName,
-        generation_config: {
-          thinking_level: "low",
-        },
-        ...(useSearchTool ? { tools: [{ type: "google_search" }] } : {}),
-        system_instruction: `You are the chief editor of globeTake, a global civic discourse platform.
+      const interaction = await callGeminiWithRetry(
+        () =>
+          ai.interactions.create({
+            model: modelName,
+            generation_config: {
+              thinking_level: "low",
+            },
+            ...(useSearchTool ? { tools: [{ type: "google_search" }] } : {}),
+            system_instruction: `You are the chief editor of globeTake, a global civic discourse platform.
 Your task: Based strictly on the provided live news clusters, produce the 3 most important, COMPLETELY DISTINCT current agendas (A, B, C) for this country in crisp, neutral English.
 Rules:
 1. NEVER fabricate facts; stay strictly faithful to the provided live news clusters.
-2. Each "title" must be a single-sentence, clickbait-free, crisp, neutral English headline (40-120 characters).
-3. Each "summary" must be a 1-2 sentence neutral background brief explaining the context.
-4. "category" must be strictly one of: POLITICS, ECONOMY, SECURITY, DIPLOMACY, SOCIETY, TECHNOLOGY, ENVIRONMENT.
-5. "clusterIndex" must reference the matching news cluster index (0-${Math.max(0, topClusters.length - 1)}).`,
-        input: `Country: ${countryName} (${countryCode})\nLive News Clusters:\n${
-          clusterDigest ||
-          "Very few clusters available; use Google Search to identify today's 3 most important real-world stories for this country in English."
-        }`,
-        response_format: {
-          type: "text",
-          mime_type: "application/json",
-          schema: {
-            type: "object",
-            properties: {
-              items: {
-                type: "array",
-                minItems: 3,
-                maxItems: 3,
-                items: {
-                  type: "object",
-                  properties: {
-                    title: { type: "string" },
-                    summary: { type: "string" },
-                    category: {
-                      type: "string",
-                      enum: [...AGENDA_CATEGORIES],
+2. ALWAYS prioritize the most recent breaking developments (latest dates first).
+3. Each "title" must be a concrete, specific, clickbait-free English headline (45-115 characters) naming the actual people, institutions, policies, or events from the cluster. NEVER write vague generic headlines like "Political debate ensues" or "Leaders hold discussions".
+4. Each "summary" must be a concrete 1-2 sentence neutral background brief grounded in the cluster.
+5. Each of the 3 items MUST reference a DIFFERENT "clusterIndex" (0-${Math.max(0, topClusters.length - 1)}).
+6. ${EDITORIAL_CATEGORY_GUIDE}`,
+            input: `Country: ${countryName} (${countryCode})\nLive News Clusters:\n${
+              clusterDigest ||
+              "Very few clusters available; use Google Search to identify today's 3 most important real-world stories for this country in English."
+            }`,
+            response_format: {
+              type: "text",
+              mime_type: "application/json",
+              schema: {
+                type: "object",
+                properties: {
+                  items: {
+                    type: "array",
+                    minItems: 3,
+                    maxItems: 3,
+                    items: {
+                      type: "object",
+                      properties: {
+                        title: { type: "string" },
+                        summary: { type: "string" },
+                        category: {
+                          type: "string",
+                          enum: [...AGENDA_CATEGORIES],
+                        },
+                        clusterIndex: { type: "integer" },
+                      },
+                      required: ["title", "summary", "category", "clusterIndex"],
                     },
-                    clusterIndex: { type: "integer" },
                   },
-                  required: ["title", "summary", "category", "clusterIndex"],
                 },
+                required: ["items"],
               },
             },
-            required: ["items"],
-          },
-        },
-      });
+          }),
+        25_000,
+        3
+      );
 
       if (interaction.output_text) {
         const parsed = JSON.parse(interaction.output_text) as {
@@ -138,9 +270,14 @@ Rules:
         };
 
         if (Array.isArray(parsed.items) && parsed.items.length === 3) {
+          const matchedClusters = resolveDistinctClusterMatches(
+            parsed.items.map((it) => it.clusterIndex),
+            topClusters
+          );
+
           return parsed.items.map((item, idx) => {
-            const matchedCluster =
-              topClusters[item.clusterIndex] || topClusters[idx];
+            const matchedCluster = matchedClusters[idx];
+            const cleanTitle = polishHeadline(item.title);
             const sources = matchedCluster
               ? matchedCluster.sources.map((s) => ({
                   title: s.title,
@@ -152,9 +289,9 @@ Rules:
 
             return {
               slot: SLOTS[idx],
-              title: polishHeadline(item.title),
+              title: cleanTitle,
               summary: item.summary.trim(),
-              category: item.category || "WORLD",
+              category: normalizeCategory(item.category, cleanTitle),
               publishedAt:
                 matchedCluster?.publishedAt || new Date().toISOString(),
               sourceOrigin: "GEMINI_GROUNDED",
@@ -474,90 +611,88 @@ export async function syncBatchCountriesToDb(
     const sparseEntries = clusterResults.filter((e) => e.clusters.length === 0);
     const handledCodes = new Set<string>();
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey = getNewsGeminiApiKey();
 
     // 2. Single batched Gemini 3.5 call for all countries with rich RSS clusters
     if (apiKey && richEntries.length > 0) {
       try {
         const ai = new GoogleGenAI({ apiKey });
-        const modelName =
-          process.env.GEMINI_NEWS_MODEL || "gemini-3.5-flash-lite";
+        const modelName = getNewsGeminiModel();
 
         const batchPrompt = richEntries
           .map(({ country, name, clusters }) => {
             const top = clusters.slice(0, 7);
             const lines = top
-              .map(
-                (c, idx) =>
-                  `  [${idx}] (${c.categoryHint} | ${c.publishedAt.slice(0, 10)}) "${c.primaryTitle}" — ${c.sources
-                    .map((s) => s.publisher)
-                    .slice(0, 2)
-                    .join(", ")}`
-              )
+              .map((c, idx) => formatClusterLineForPrompt(c, idx))
               .join("\n");
             return `=== COUNTRY: ${country.code} | ${name} ===\n${lines}`;
           })
           .join("\n\n");
 
-        const interaction = await ai.interactions.create({
-          model: modelName,
-          generation_config: {
-            thinking_level: "low",
-          },
-          system_instruction: `You are the chief editor of globeTake, a global civic discourse platform.
+        const interaction = await callGeminiWithRetry(
+          () =>
+            ai.interactions.create({
+              model: modelName,
+              generation_config: {
+                thinking_level: "low",
+              },
+              system_instruction: `You are the chief editor of globeTake, a global civic discourse platform.
 For each country provided, use its live news clusters to prepare the 3 most important, COMPLETELY DISTINCT real-world agendas (items: exactly 3 elements) in crisp, neutral English.
 Rules:
 1. NEVER fabricate facts; stay strictly faithful to the provided live news clusters.
 2. ALWAYS prioritize the most recent breaking developments (latest dates first).
-3. Each "title" must be a single-sentence, clickbait-free, neutral English headline (40-120 characters).
-4. Each "summary" must be a 1-2 sentence neutral background brief.
-5. "category": POLITICS, ECONOMY, SECURITY, DIPLOMACY, SOCIETY, TECHNOLOGY, or ENVIRONMENT.
-6. "clusterIndex": matching cluster index (0-6) for that country.`,
-          input: batchPrompt,
-          response_format: {
-            type: "text",
-            mime_type: "application/json",
-            schema: {
-              type: "object",
-              properties: {
-                countries: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      code: { type: "string" },
+3. Each "title" must be concrete and specific (45-115 characters), naming real people, institutions, countries, laws, or events from the cluster. NEVER write vague placeholders like "Leaders hold discussions", "Political debate ensues", or "Administration reports developments".
+4. Each "summary" must be a concrete 1-2 sentence neutral background brief grounded in the cluster.
+5. Each of the 3 items for a country MUST reference a DIFFERENT "clusterIndex" (0-6).
+6. ${EDITORIAL_CATEGORY_GUIDE}`,
+              input: batchPrompt,
+              response_format: {
+                type: "text",
+                mime_type: "application/json",
+                schema: {
+                  type: "object",
+                  properties: {
+                    countries: {
+                      type: "array",
                       items: {
-                        type: "array",
-                        minItems: 3,
-                        maxItems: 3,
-                        items: {
-                          type: "object",
-                          properties: {
-                            title: { type: "string" },
-                            summary: { type: "string" },
-                            category: {
-                              type: "string",
-                              enum: [...AGENDA_CATEGORIES],
+                        type: "object",
+                        properties: {
+                          code: { type: "string" },
+                          items: {
+                            type: "array",
+                            minItems: 3,
+                            maxItems: 3,
+                            items: {
+                              type: "object",
+                              properties: {
+                                title: { type: "string" },
+                                summary: { type: "string" },
+                                category: {
+                                  type: "string",
+                                  enum: [...AGENDA_CATEGORIES],
+                                },
+                                clusterIndex: { type: "integer" },
+                              },
+                              required: [
+                                "title",
+                                "summary",
+                                "category",
+                                "clusterIndex",
+                              ],
                             },
-                            clusterIndex: { type: "integer" },
                           },
-                          required: [
-                            "title",
-                            "summary",
-                            "category",
-                            "clusterIndex",
-                          ],
                         },
+                        required: ["code", "items"],
                       },
                     },
-                    required: ["code", "items"],
                   },
+                  required: ["countries"],
                 },
               },
-              required: ["countries"],
-            },
-          },
-        });
+            }),
+          45_000,
+          3
+        );
 
         if (interaction.output_text) {
           const parsed = JSON.parse(interaction.output_text) as {
@@ -583,14 +718,20 @@ Rules:
                 found.items.length === 3
               ) {
                 const top = entry.clusters.slice(0, 7);
+                const matchedClusters = resolveDistinctClusterMatches(
+                  found.items.map((it) => it.clusterIndex),
+                  top
+                );
+
                 const slots: CuratedAgendaSlot[] = found.items.map(
                   (item, idx) => {
-                    const matched = top[item.clusterIndex] || top[idx];
+                    const matched = matchedClusters[idx];
+                    const cleanTitle = polishHeadline(item.title);
                     return {
                       slot: SLOTS[idx],
-                      title: polishHeadline(item.title),
+                      title: cleanTitle,
                       summary: item.summary.trim(),
-                      category: item.category || "WORLD",
+                      category: normalizeCategory(item.category, cleanTitle),
                       publishedAt:
                         matched?.publishedAt || new Date().toISOString(),
                       sourceOrigin: "GEMINI_GROUNDED",

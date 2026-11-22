@@ -122,7 +122,7 @@ const STOPWORDS = new Set([
 ]);
 
 const TRIVIAL_GOSSIP_SPORTS_REGEX =
-  /\b(horoscope|astrology|premier league|champions league|la liga|serie a|bundesliga|nba playoffs|nfl draft|super bowl|match highlights|watch live|starting xi|transfer rumors|celebrity|kardashian|tiktok trend|lottery results|weather forecast|box office)\b/i;
+  /\b(horoscope|astrology|premier league|champions league|la liga|serie a|bundesliga|manchester united|manchester city|real madrid|barcelona fc|arsenal fc|chelsea fc|liverpool fc|coaching staff|head coach|nba playoffs|nfl draft|super bowl|mlb|nhl|fifa world cup|uefa|match highlights|watch live|starting xi|transfer rumors|celebrity|kardashian|tiktok trend|lottery results|weather forecast|box office)\b/i;
 
 export function decodeXmlEntities(raw: string): string {
   return raw
@@ -239,42 +239,42 @@ export function extractSignificantTokens(
 export function inferAgendaCategory(text: string): string {
   const lower = text.toLowerCase();
   if (
-    /\b(inflation|economy|economic|gdp|bank|interest rate|tax|budget|trade|tariff|currency|debt|market|energy|oil|gas|exports|recession|imf|central bank|housing|wages)\b/i.test(
-      lower
-    )
-  ) {
-    return "ECONOMY";
-  }
-  if (
-    /\b(military|war|army|missile|attack|defense|defence|security|border|troops|ceasefire|police|conflict|terror|strike|airstrike|insurgent|navy)\b/i.test(
-      lower
-    )
-  ) {
-    return "SECURITY";
-  }
-  if (
-    /\b(summit|diplomacy|diplomatic|treaty|ambassador|foreign minister|nato|un|eu|sanctions|bilateral|alliance|talks|negotiation|accord|embassy)\b/i.test(
-      lower
-    )
-  ) {
-    return "DIPLOMACY";
-  }
-  if (
-    /\b(ai|artificial intelligence|tech|chip|semiconductor|cyber|space|satellite|digital|telecom|quantum|data center|startup)\b/i.test(
+    /\b(cyberattack|cyber\s*attack|ransomware|malware|ai|artificial intelligence|tech|chip|semiconductor|cyber|space|satellite|digital|telecom|quantum|data center|startup|web hosting|hacker)\b/i.test(
       lower
     )
   ) {
     return "TECHNOLOGY";
   }
   if (
-    /\b(earthquake|flood|wildfire|climate|volcano|storm|drought|environment|emission|hurricane|typhoon|carbon|renewable|glacier)\b/i.test(
+    /\b(earthquake|flood|wildfire|climate|cop\d+|volcano|storm|drought|environment|emission|hurricane|typhoon|carbon|renewable|glacier|fossil fuel)\b/i.test(
       lower
     )
   ) {
     return "ENVIRONMENT";
   }
   if (
-    /\b(election|parliament|president|prime minister|coalition|vote|voting|court|law|reform|opposition|protest|government|senate|congress|cabinet|minister|constitution)\b/i.test(
+    /\b(military|war|army|missile|attack|defense|defence|security|border|troops|ceasefire|police|conflict|terror|airstrike|insurgent|navy|weapon|nato defense)\b/i.test(
+      lower
+    )
+  ) {
+    return "SECURITY";
+  }
+  if (
+    /\b(summit|diplomacy|diplomatic|treaty|ambassador|foreign minister|nato|un|eu|sanctions|bilateral|trilateral|alliance|talks|negotiation|accord|embassy|state visit|visits)\b/i.test(
+      lower
+    )
+  ) {
+    return "DIPLOMACY";
+  }
+  if (
+    /\b(inflation|economy|economic|gdp|bank|interest rate|tax|budget|trade|tariff|import|export|currency|debt|market|energy|oil|gas|recession|imf|central bank|housing|wages|union|metalworkers|labor strike|labour strike|workers strike)\b/i.test(
+      lower
+    )
+  ) {
+    return "ECONOMY";
+  }
+  if (
+    /\b(election|parliament|president|prime minister|coalition|vote|voting|court|supreme court|law|reform|opposition|protest|government|senate|congress|cabinet|minister|constitution)\b/i.test(
       lower
     )
   ) {
@@ -449,7 +449,7 @@ export async function fetchCountryLiveNewsClusters(
     },
     {
       url: `https://www.bing.com/news/search?q=${encodeURIComponent(
-        `${countryName} news`
+        `"${countryName}" (government OR economy OR politics)`
       )}&format=rss&setlang=en-US&qft=interval%3d%227%22`,
       maxAgeDays: 7,
     },

@@ -52,8 +52,22 @@ export async function verifyPassword(
   return timingSafeEqual(keyBuf, derived);
 }
 
+let warnedDefaultSecret = false;
+
 export function hashSessionToken(rawToken: string): string {
   const secret = process.env.AUTH_SECRET || "agora-mundi-default-secret";
+  if (
+    process.env.NODE_ENV === "production" &&
+    !warnedDefaultSecret &&
+    (!process.env.AUTH_SECRET ||
+      secret.includes("change-this-secret") ||
+      secret === "agora-mundi-default-secret")
+  ) {
+    warnedDefaultSecret = true;
+    console.warn(
+      "[auth] WARNING: AUTH_SECRET is missing or using a placeholder in production. Set a strong random AUTH_SECRET."
+    );
+  }
   return createHash("sha256").update(`${rawToken}:${secret}`).digest("hex");
 }
 

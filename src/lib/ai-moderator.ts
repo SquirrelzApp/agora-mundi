@@ -120,11 +120,17 @@ export async function moderateComment(
     }
   }
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  const apiKey =
+    process.env.GEMINI_MODERATION_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY;
   if (apiKey) {
     try {
       const ai = new GoogleGenAI({ apiKey });
-      const modelName = process.env.GEMINI_NEWS_MODEL || "gemini-3.5-flash-lite";
+      const modelName =
+        process.env.GEMINI_MODERATION_MODEL ||
+        process.env.GEMINI_NEWS_MODEL ||
+        "gemini-3.5-flash-lite";
       const contextBlock = options?.isReply
         ? `\nType: Nested REPLY to another user's comment${
             options.parentExcerpt
@@ -133,43 +139,71 @@ export async function moderateComment(
           }`
         : "\nType: Top-level comment on an agenda item";
 
-      const interaction = await ai.interactions.create({
-        model: modelName,
-        generation_config: {
-          thinking_level: "low",
-        },
-        system_instruction: `You are the content moderator for globeTake, a global civic discourse platform.
+      const runModerationCall = async () => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          return await Promise.race([
+            ai.interactions.create({
+              model: modelName,
+              generation_config: {
+                thinking_level: "low",
+              },
+              system_instruction: `You are the content moderator for globeTake, a global civic discourse platform.
 STRICT RULES:
 1. ONLY reject (approved: false) comments containing profanity, severe slurs, direct personal insults, racism, ethnic hate speech, or random keyboard-mash / commercial ad bot spam.
 2. Concise user opinions (10+ characters), conversational replies (e.g., "I completely agree...", "I see this differently..."), sharp political critiques, questions, external news/article links, and tangential discussion MUST ALWAYS BE APPROVED (approved: true, violationCategory: "NONE").
 3. NEVER reject a comment or reply merely for not repeating headline keywords or being brief agreement/disagreement (LOW_EFFORT_SPAM is strictly for gibberish or ad bots).
 4. If rejected, write "reason" in clear, polite English.
 5. Score the comment's intellectual contribution and clarity from 1 to 100 (qualityScore).`,
-        input: `Country: ${countryName}\nAgenda Headline: ${agendaTitle}${contextBlock}\nUser Comment: "${commentText}"`,
-        response_format: {
-          type: "text",
-          mime_type: "application/json",
-          schema: {
-            type: "object",
-            properties: {
-              approved: { type: "boolean" },
-              reason: { type: "string" },
-              violationCategory: {
-                type: "string",
-                enum: [
-                  "NONE",
-                  "PROFANITY",
-                  "RACISM_HATE",
-                  "PERSONAL_INSULT",
-                  "LOW_EFFORT_SPAM",
-                ],
+              input: `Country: ${countryName}\nAgenda Headline: ${agendaTitle}${contextBlock}\nUser Comment: "${commentText}"`,
+              response_format: {
+                type: "text",
+                mime_type: "application/json",
+                schema: {
+                  type: "object",
+                  properties: {
+                    approved: { type: "boolean" },
+                    reason: { type: "string" },
+                    violationCategory: {
+                      type: "string",
+                      enum: [
+                        "NONE",
+                        "PROFANITY",
+                        "RACISM_HATE",
+                        "PERSONAL_INSULT",
+                        "LOW_EFFORT_SPAM",
+                      ],
+                    },
+                    qualityScore: { type: "integer" },
+                  },
+                  required: ["approved", "violationCategory", "qualityScore"],
+                },
               },
-              qualityScore: { type: "integer" },
-            },
-            required: ["approved", "violationCategory", "qualityScore"],
-          },
-        },
-      });
+            }),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(
+                () => reject(new Error("Gemini moderation timeout after 12000ms")),
+                12_000
+              );
+            }),
+          ]);
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      };
+
+      let interaction;
+      try {
+        interaction = await runModerationCall();
+      } catch (firstErr) {
+        const msg = String(firstErr instanceof Error ? firstErr.message : firstErr);
+        if (/429|500|502|503|504|timeout|unavailable|fetch failed/i.test(msg)) {
+          await new Promise((r) => setTimeout(r, 800));
+          interaction = await runModerationCall();
+        } else {
+          throw firstErr;
+        }
+      }
 
       if (interaction.output_text) {
         const parsed = JSON.parse(interaction.output_text) as ModerationResult;

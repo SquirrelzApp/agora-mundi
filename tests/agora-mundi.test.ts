@@ -19,6 +19,8 @@ import {
 } from "../src/lib/ai-moderator";
 import { getAllWorldCountries } from "../src/lib/world-countries";
 import { getSchedulerStatusSnapshot } from "../src/lib/news-scheduler";
+import { resolveDistinctClusterMatches } from "../src/lib/ai-agenda-curator";
+import { checkRateLimit, verifyCronSecretToken } from "../src/lib/request-guard";
 
 describe("World Countries Catalog (English)", () => {
   it("loads ~174 world countries in English with capitals, currencies, and coordinates", () => {
@@ -202,5 +204,45 @@ describe("Authentication & Moderation Rules", () => {
     );
     assert.equal(profanityRes.approved, false);
     assert.equal(profanityRes.violationCategory, "PROFANITY");
+  });
+});
+
+describe("Production Hardening: Deduplication, Categories & Request Guards", () => {
+  it("deduplicates repeated or out-of-bounds Gemini clusterIndex values", () => {
+    const clusters = ["c0", "c1", "c2", "c3"];
+    const matched = resolveDistinctClusterMatches([1, 1, 99], clusters);
+    assert.deepEqual(matched, ["c1", "c0", "c2"]);
+  });
+
+  it("classifies cyberattacks, labor strikes/tariffs, and diplomatic visits accurately", () => {
+    assert.equal(
+      inferAgendaCategory("Major cyberattack disrupts Icelandic web hosting services"),
+      "TECHNOLOGY"
+    );
+    assert.equal(
+      inferAgendaCategory("German metalworkers union calls for 24-hour labor strike over wages"),
+      "ECONOMY"
+    );
+    assert.equal(
+      inferAgendaCategory("Nepal Prime Minister visits India to strengthen bilateral relations"),
+      "DIPLOMACY"
+    );
+  });
+
+  it("enforces sliding-window rate limits accurately", () => {
+    const key = `test-rl-${Date.now()}`;
+    assert.equal(checkRateLimit(key, 2, 60_000).allowed, true);
+    assert.equal(checkRateLimit(key, 2, 60_000).allowed, true);
+    const blocked = checkRateLimit(key, 2, 60_000);
+    assert.equal(blocked.allowed, false);
+    assert.ok(blocked.retryAfterSec >= 1);
+  });
+
+  it("verifies CRON_SECRET in constant time and fails closed in production when unset", () => {
+    assert.equal(verifyCronSecretToken(null, undefined, true).ok, false);
+    assert.equal(verifyCronSecretToken(null, undefined, true).status, 503);
+    assert.equal(verifyCronSecretToken(null, undefined, false).ok, true);
+    assert.equal(verifyCronSecretToken("wrong", "supersecret", true).ok, false);
+    assert.equal(verifyCronSecretToken("supersecret", "supersecret", true).ok, true);
   });
 });
