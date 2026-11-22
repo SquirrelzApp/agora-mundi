@@ -14,9 +14,8 @@ export async function GET() {
       await prisma.country.createMany({
         data: catalog.map((c) => ({
           code: c.code,
-          nameTr: c.nameTr,
-          nameEn: c.nameEn,
-          officialNameTr: c.officialNameTr,
+          name: c.name,
+          officialName: c.officialName,
           capital: c.capital,
           region: c.region,
           subregion: c.subregion,
@@ -54,14 +53,14 @@ export async function GET() {
           },
         },
       },
-      orderBy: { nameTr: "asc" },
+      orderBy: { name: "asc" },
     });
 
     return NextResponse.json({ countries, total: count });
   } catch (error) {
     console.error("GET /api/countries error:", error);
     return NextResponse.json(
-      { error: "Ülke gündemleri yüklenemedi." },
+      { error: "Failed to load country agendas." },
       { status: 500 }
     );
   }

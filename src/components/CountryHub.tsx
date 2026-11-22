@@ -75,9 +75,8 @@ export interface AgendaDetail {
 
 export interface CountryDetail {
   code: string;
-  nameTr: string;
-  nameEn: string;
-  officialNameTr?: string | null;
+  name: string;
+  officialName?: string | null;
   capital?: string | null;
   region: string;
   subregion?: string | null;
@@ -89,10 +88,9 @@ export interface CountryDetail {
   currencySymbol?: string | null;
   languages: string[];
   callingCode?: string | null;
-  summaryTr?: string | null;
+  summary?: string | null;
   wikiUrl?: string | null;
   usdRate?: number | null;
-  tryRate?: number | null;
   tempo: string;
   updateIntervalHours: number;
   lastSyncedAt?: string | null;
@@ -118,51 +116,53 @@ interface CountryHubProps {
   onCommentCreated: () => Promise<void>;
 }
 
-function formatPopulationTr(pop?: number | null): string | null {
+function formatPopulation(pop?: number | null): string | null {
   if (!pop || pop <= 0) return null;
   if (pop >= 1_000_000_000) {
-    return `${(pop / 1_000_000_000).toLocaleString("tr-TR", {
+    return `${(pop / 1_000_000_000).toLocaleString("en-US", {
       maximumFractionDigits: 2,
-    })} Milyar`;
+    })}B`;
   }
   if (pop >= 1_000_000) {
-    return `${(pop / 1_000_000).toLocaleString("tr-TR", {
+    return `${(pop / 1_000_000).toLocaleString("en-US", {
       maximumFractionDigits: 1,
-    })} Milyon`;
+    })}M`;
   }
   if (pop >= 1_000) {
-    return `${Math.round(pop / 1_000).toLocaleString("tr-TR")} Bin`;
+    return `${Math.round(pop / 1_000).toLocaleString("en-US")}K`;
   }
-  return pop.toLocaleString("tr-TR");
+  return pop.toLocaleString("en-US");
 }
 
-function formatRelativeTimeTr(iso?: string | null): string {
-  if (!iso) return "Yeni";
+function formatRelativeTime(iso?: string | null): string {
+  if (!iso) return "Fresh";
   const ts = new Date(iso).getTime();
-  if (Number.isNaN(ts)) return "Güncel";
+  if (Number.isNaN(ts)) return "Updated";
   const diffMin = Math.max(0, Math.floor((Date.now() - ts) / 60000));
-  if (diffMin < 2) return "Az önce";
-  if (diffMin < 60) return `${diffMin} dk önce`;
+  if (diffMin < 2) return "Just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
   const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `${diffHours} saat önce`;
+  if (diffHours < 24) return `${diffHours}h ago`;
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays} gün önce`;
-  return new Date(iso).toLocaleDateString("tr-TR");
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return new Date(iso).toLocaleDateString("en-US");
 }
 
 function getCategoryStyle(cat: string): string {
   switch (cat) {
-    case "EKONOMİ":
+    case "ECONOMY":
       return "bg-amber-500/10 text-amber-800";
-    case "GÜVENLİK":
+    case "SECURITY":
       return "bg-rose-500/10 text-rose-800";
-    case "DİPLOMASİ":
+    case "DIPLOMACY":
       return "bg-indigo-500/10 text-indigo-800";
-    case "TEKNOLOJİ":
+    case "TECHNOLOGY":
       return "bg-cyan-500/10 text-cyan-800";
-    case "ÇEVRE":
+    case "ENVIRONMENT":
       return "bg-emerald-500/10 text-emerald-800";
-    case "SİYASET":
+    case "SOCIETY":
+      return "bg-violet-500/10 text-violet-800";
+    case "POLITICS":
       return "bg-authority/10 text-authority";
     default:
       return "bg-gray-200/80 text-ink";
@@ -229,7 +229,7 @@ export default function CountryHub({
         </div>
         <div className="p-4 rounded-2xl bg-authority/5 text-xs text-authority font-medium flex items-center gap-2">
           <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-          <span>Ülke gündemleri ve künye bilgileri yükleniyor...</span>
+          <span>Loading country agendas and profile details...</span>
         </div>
         <div className="grid grid-cols-1 gap-3">
           {[1, 2, 3].map((n) => (
@@ -283,7 +283,7 @@ export default function CountryHub({
 
     if (!currentUser) {
       onOpenAuth(
-        "Yazdığınız yorum korunuyor! Yayınlamak için hemen giriş yapın veya 10 saniyede kayıt olun."
+        "Your draft comment is saved! Sign in or create an account in seconds to publish."
       );
       return;
     }
@@ -298,24 +298,26 @@ export default function CountryHub({
         body: JSON.stringify({
           agendaItemId,
           content: commentText,
-          stanceTag: "YORUM",
+          stanceTag: "COMMENT",
           sourceUrl: sourceUrl.trim() || undefined,
-          languageCode: "tr",
+          languageCode: "en",
         }),
       });
       const data = await res.json();
 
       if (res.status === 401 && data.requiresAuth) {
-        onOpenAuth("Yorum paylaşmak için giriş yapın.");
+        onOpenAuth("Sign in to share a comment.");
         return;
       }
 
       if (!res.ok || !data.approved) {
         setFeedback({
           type: "error",
-          title: "Yorum Yayınlanamadı",
+          title: "Unable to Publish Comment",
           message:
-            data.reason || data.error || "Lütfen kurallara uygun yazın.",
+            data.reason ||
+            data.error ||
+            "Please make sure your comment follows community guidelines.",
         });
         return;
       }
@@ -325,8 +327,8 @@ export default function CountryHub({
       setShowSourceInput(false);
       setFeedback({
         type: "success",
-        title: "Yorumunuz Yayınlandı",
-        message: "Görüşünüz ülke tartışma akışına eklendi.",
+        title: "Comment Published",
+        message: "Your take has been added to the country discussion feed.",
       });
       await onCommentCreated();
     } finally {
@@ -342,7 +344,7 @@ export default function CountryHub({
     e.preventDefault();
 
     if (!currentUser) {
-      onOpenAuth("Yanıt göndermek için giriş yapın veya hızlıca kayıt olun.");
+      onOpenAuth("Sign in or quickly create an account to post a reply.");
       return;
     }
 
@@ -357,25 +359,25 @@ export default function CountryHub({
           agendaItemId,
           parentId,
           content: replyText,
-          stanceTag: "YORUM",
-          languageCode: "tr",
+          stanceTag: "COMMENT",
+          languageCode: "en",
         }),
       });
       const data = await res.json();
 
       if (res.status === 401 && data.requiresAuth) {
-        onOpenAuth("Yanıt göndermek için giriş yapın.");
+        onOpenAuth("Sign in to post a reply.");
         return;
       }
 
       if (!res.ok || !data.approved) {
         setFeedback({
           type: "error",
-          title: "Yanıt Gönderilemedi",
+          title: "Unable to Post Reply",
           message:
             data.reason ||
             data.error ||
-            "Yanıtınız en az 10 karakter ve kurallara uygun olmalıdır.",
+            "Your reply must be at least 10 characters and follow community guidelines.",
         });
         return;
       }
@@ -388,7 +390,7 @@ export default function CountryHub({
     }
   };
 
-  const formattedPop = formatPopulationTr(country.population);
+  const formattedPop = formatPopulation(country.population);
 
   return (
     <div className="w-full space-y-5">
@@ -396,7 +398,7 @@ export default function CountryHub({
           1. COUNTRY INTELLIGENCE & MACRO PROFILE CARD
          ==================================================================== */}
       <section
-        aria-label={`${country.nameTr} Ülke Bilgileri`}
+        aria-label={`${country.name} Country Overview`}
         className="bg-white/95 backdrop-blur-xl rounded-3xl p-5 sm:p-6 shadow-[0_10px_35px_rgba(15,23,42,0.05)] space-y-4"
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -407,16 +409,16 @@ export default function CountryHub({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="font-serif font-bold text-xl sm:text-2xl text-ink truncate">
-                  {country.nameTr}
+                  {country.name}
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full bg-gray-100 text-[11px] font-semibold text-slate">
                   {country.subregion || country.region}
                 </span>
               </div>
               <p className="text-xs text-slate truncate mt-0.5">
-                {country.officialNameTr || country.nameEn} • Son Güncelleme:{" "}
+                {country.officialName || country.name} • Last Updated:{" "}
                 <strong className="text-ink">
-                  {formatRelativeTimeTr(
+                  {formatRelativeTime(
                     country.lastSyncedAt || country.lastUpdatedAt
                   )}
                 </strong>
@@ -427,11 +429,11 @@ export default function CountryHub({
           <div className="flex items-center gap-2 shrink-0">
             <span
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-800 text-[11px] font-semibold"
-              title="Haberler sunucuda otomatik olarak Gemini 3.5 ile işlenip veritabanına kaydedilir"
+              title="News is automatically synthesized on the server with Gemini 3.5 and saved to the database"
             >
               <Sparkles className="w-3.5 h-3.5 shrink-0" />
               <span>
-                Otomatik Akış • {country.updateIntervalHours}s periyot
+                Auto Feed • Every {country.updateIntervalHours}h
               </span>
             </span>
 
@@ -439,8 +441,8 @@ export default function CountryHub({
               type="button"
               onClick={onCloseCountry}
               className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-slate hover:text-ink transition"
-              title="Ülke görünümünü kapat ve küreyi büyüt"
-              aria-label="Küreyi Büyüt"
+              title="Close country view and expand the globe"
+              aria-label="Expand Globe"
             >
               <Maximize2 className="w-4 h-4" />
             </button>
@@ -454,7 +456,7 @@ export default function CountryHub({
               <Landmark className="w-4 h-4 text-authority shrink-0" />
               <div className="min-w-0">
                 <div className="text-[10px] text-slate uppercase font-semibold">
-                  Başkent
+                  Capital
                 </div>
                 <div className="font-bold text-ink truncate">
                   {country.capital}
@@ -468,7 +470,7 @@ export default function CountryHub({
               <Users className="w-4 h-4 text-authority shrink-0" />
               <div className="min-w-0">
                 <div className="text-[10px] text-slate uppercase font-semibold">
-                  Nüfus
+                  Population
                 </div>
                 <div className="font-bold text-ink truncate">{formattedPop}</div>
               </div>
@@ -480,13 +482,13 @@ export default function CountryHub({
               <Coins className="w-4 h-4 text-authority shrink-0" />
               <div className="min-w-0">
                 <div className="text-[10px] text-slate uppercase font-semibold">
-                  Para Birimi
+                  Currency
                 </div>
                 <div className="font-bold text-ink truncate">
                   {country.currencyCode} ({country.currencySymbol})
                   {country.usdRate && country.currencyCode !== "USD" && (
                     <span className="font-mono font-normal text-[11px] text-slate ml-1">
-                      • 1$={country.usdRate.toFixed(2)}
+                      • $1={country.usdRate.toFixed(2)}
                     </span>
                   )}
                 </div>
@@ -499,13 +501,13 @@ export default function CountryHub({
               <Globe2 className="w-4 h-4 text-authority shrink-0" />
               <div className="min-w-0">
                 <div className="text-[10px] text-slate uppercase font-semibold">
-                  Dil & Yüzölçümü
+                  Language & Area
                 </div>
                 <div className="font-bold text-ink truncate">
                   {country.languages[0] || "-"}
                   {country.areaKm2
                     ? ` • ${Math.round(country.areaKm2).toLocaleString(
-                        "tr-TR"
+                        "en-US"
                       )} km²`
                     : ""}
                 </div>
@@ -515,7 +517,7 @@ export default function CountryHub({
         </div>
 
         {/* Collapsible Wikipedia Country Overview */}
-        {country.summaryTr && (
+        {country.summary && (
           <div className="pt-1">
             <button
               type="button"
@@ -525,8 +527,8 @@ export default function CountryHub({
               <BookOpen className="w-3.5 h-3.5" />
               <span>
                 {wikiExpanded
-                  ? "Ülke Ansiklopedik Bilgisini Gizle"
-                  : `${country.nameTr} Hakkında Genel Bilgi`}
+                  ? "Hide Country Overview"
+                  : `About ${country.name}`}
               </span>
               {wikiExpanded ? (
                 <ChevronUp className="w-3.5 h-3.5" />
@@ -537,7 +539,7 @@ export default function CountryHub({
 
             {wikiExpanded && (
               <div className="mt-2.5 p-4 rounded-2xl bg-gray-100/70 text-xs text-ink leading-relaxed space-y-2">
-                <p>{country.summaryTr}</p>
+                <p>{country.summary}</p>
                 {country.wikiUrl && (
                   <a
                     href={country.wikiUrl}
@@ -546,7 +548,7 @@ export default function CountryHub({
                     className="inline-flex items-center gap-1 font-semibold text-authority hover:underline"
                   >
                     <ExternalLink className="w-3 h-3" />
-                    <span>Wikipedia Sayfasını İncele</span>
+                    <span>Read on Wikipedia</span>
                   </a>
                 )}
               </div>
@@ -559,20 +561,20 @@ export default function CountryHub({
           2. LIVE TOP 3 AGENDAS (A - B - C) WITH VERIFIED NEWS SOURCES
          ==================================================================== */}
       <section
-        aria-label={`${country.nameTr} En Çok Konuşulan 3 Gündemi`}
+        aria-label={`${country.name} Top 3 Live Agendas`}
         className="space-y-3"
       >
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-authority" />
             <h2 className="font-serif font-bold text-base sm:text-lg text-ink">
-              En Çok Konuşulan 3 Canlı Gündem
+              Top 3 Live Agendas
             </h2>
           </div>
           <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-800 font-semibold">
             {country.agendas.some((a) => a.sourceOrigin === "GEMINI_GROUNDED")
-              ? "Gemini 3.5 + Canlı Basın"
-              : "Canlı Basın Akışı"}
+              ? "Gemini 3.5 + Live Press"
+              : "Live Press Feed"}
           </span>
         </div>
 
@@ -634,7 +636,7 @@ export default function CountryHub({
                           </span>
                           {agenda.publishedAt && (
                             <span className="text-[11px] text-slate">
-                              • {formatRelativeTimeTr(agenda.publishedAt)}
+                              • {formatRelativeTime(agenda.publishedAt)}
                             </span>
                           )}
                         </div>
@@ -694,8 +696,10 @@ export default function CountryHub({
                     <MessageCircle className="w-3.5 h-3.5" />
                     <span>
                       {agenda.commentCount > 0
-                        ? `${agenda.commentCount} Yorum`
-                        : "Yorum yap"}
+                        ? `${agenda.commentCount} ${
+                            agenda.commentCount === 1 ? "Comment" : "Comments"
+                          }`
+                        : "Add a comment"}
                     </span>
                     {isExpanded ? (
                       <ChevronUp className="w-3.5 h-3.5 ml-0.5" />
@@ -714,25 +718,25 @@ export default function CountryHub({
                     {/* Controls: Translate & Sort */}
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs font-bold text-ink">
-                        Yorumlar ({agenda.comments.length})
+                        Comments ({agenda.comments.length})
                       </span>
 
                       <div className="flex items-center gap-2 shrink-0">
                         <select
-                          aria-label="Çeviri Dili"
+                          aria-label="Translation Language"
                           value={preferredTranslateLang}
                           onChange={(e) =>
                             onChangeTranslateLang(e.target.value)
                           }
                           className="px-2.5 py-1 bg-gray-100 rounded-full text-[11px] font-semibold text-ink focus:outline-none cursor-pointer"
-                          title="Yorum çeviri hedef dili"
+                          title="Target language for comment translation"
                         >
-                          <option value="tr">Çeviri: TR</option>
-                          <option value="en">Çeviri: EN</option>
-                          <option value="de">Çeviri: DE</option>
-                          <option value="fr">Çeviri: FR</option>
-                          <option value="ru">Çeviri: RU</option>
-                          <option value="ar">Çeviri: AR</option>
+                          <option value="en">Translate: EN</option>
+                          <option value="tr">Translate: TR</option>
+                          <option value="de">Translate: DE</option>
+                          <option value="fr">Translate: FR</option>
+                          <option value="ru">Translate: RU</option>
+                          <option value="ar">Translate: AR</option>
                         </select>
 
                         <div className="flex items-center p-0.5 rounded-full text-xs bg-gray-100">
@@ -745,7 +749,7 @@ export default function CountryHub({
                                 : "text-slate"
                             }`}
                           >
-                            Popüler
+                            Top
                           </button>
                           <button
                             type="button"
@@ -756,7 +760,7 @@ export default function CountryHub({
                                 : "text-slate"
                             }`}
                           >
-                            En Yeni
+                            Newest
                           </button>
                         </div>
                       </div>
@@ -769,10 +773,10 @@ export default function CountryHub({
                     >
                       <div className="text-xs">
                         {currentUser ? (
-                          <span className="font-semibold text-ink">
-                            @{currentUser.username}{" "}
-                            <span className="text-slate font-normal">
-                              olarak yorum yazıyorsunuz
+                          <span className="text-slate font-normal">
+                            Commenting as{" "}
+                            <span className="font-semibold text-ink">
+                              @{currentUser.username}
                             </span>
                           </span>
                         ) : (
@@ -781,8 +785,8 @@ export default function CountryHub({
                             onClick={() => onOpenAuth()}
                             className="font-semibold text-authority hover:underline"
                           >
-                            Yorum paylaşmak için giriş yapın veya ücretsiz kayıt
-                            olun →
+                            Sign in or create a free account to share a comment
+                            →
                           </button>
                         )}
                       </div>
@@ -794,7 +798,7 @@ export default function CountryHub({
                         maxLength={1000}
                         value={commentText}
                         onChange={(e) => setCommentText(e.target.value)}
-                        placeholder={`${country.nameTr} gündemindeki bu gelişme hakkında ne düşünüyorsunuz? (En az 10 karakter)`}
+                        placeholder={`What is your take on this ${country.name} story? (Minimum 10 characters)`}
                         className="w-full p-3.5 text-sm bg-gray-100/80 rounded-2xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-authority/25 leading-relaxed transition"
                       />
 
@@ -803,7 +807,7 @@ export default function CountryHub({
                           type="url"
                           value={sourceUrl}
                           onChange={(e) => setSourceUrl(e.target.value)}
-                          placeholder="Opsiyonel kaynak veya haber bağlantısı (https://...)"
+                          placeholder="Optional source or news link (https://...)"
                           className="w-full px-3.5 py-2 text-xs bg-gray-100/80 rounded-full focus:outline-none focus:ring-2 focus:ring-authority/20"
                         />
                       )}
@@ -817,8 +821,8 @@ export default function CountryHub({
                           <Link2 className="w-3.5 h-3.5" />
                           <span>
                             {showSourceInput
-                              ? "Kaynak Linkini Kapat"
-                              : "Kaynak Linki Ekle"}
+                              ? "Hide Source Link"
+                              : "Add Source Link"}
                           </span>
                         </button>
 
@@ -836,10 +840,10 @@ export default function CountryHub({
                             <Send className="w-3.5 h-3.5" />
                             <span>
                               {submitting
-                                ? "Denetleniyor..."
+                                ? "Reviewing..."
                                 : currentUser
-                                ? "Yorumu Gönder"
-                                : "Giriş Yap ve Gönder"}
+                                ? "Post Comment"
+                                : "Sign In & Post"}
                             </span>
                           </button>
                         </div>
@@ -881,11 +885,11 @@ export default function CountryHub({
                       {agenda.comments.length === 0 ? (
                         <div className="p-6 bg-gray-50 rounded-2xl text-center space-y-1">
                           <div className="text-xs font-semibold text-ink">
-                            Bu başlıkta ilk yorumu siz yapın
+                            Be the first to comment on this agenda
                           </div>
                           <p className="text-[11px] text-slate">
-                            {country.nameTr} gündemindeki bu gelişme hakkında
-                            henüz görüş paylaşılmamış.
+                            No takes have been shared on this {country.name}{" "}
+                            story yet.
                           </p>
                         </div>
                       ) : (
@@ -938,7 +942,7 @@ export default function CountryHub({
                                       @{comment.author.username}
                                     </button>
                                     <span className="text-[11px] text-slate">
-                                      • {formatRelativeTimeTr(comment.createdAt)}
+                                      • {formatRelativeTime(comment.createdAt)}
                                     </span>
                                   </div>
                                 </div>
@@ -952,11 +956,11 @@ export default function CountryHub({
                               {trState && (
                                 <div className="p-3 bg-white rounded-2xl text-xs text-ink break-words">
                                   <span className="font-mono text-[10px] text-authority font-semibold uppercase block mb-0.5">
-                                    Google Çeviri (
+                                    Google Translate (
                                     {trState.targetLang.toUpperCase()})
                                   </span>
                                   {trState.loading
-                                    ? "Çevriliyor..."
+                                    ? "Translating..."
                                     : trState.text}
                                 </div>
                               )}
@@ -970,7 +974,7 @@ export default function CountryHub({
                                     className="inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-full text-xs text-authority hover:underline"
                                   >
                                     <ExternalLink className="w-3 h-3 shrink-0" />
-                                    <span>Kaynak Bağlantısı</span>
+                                    <span>Source Link</span>
                                   </a>
                                 </div>
                               )}
@@ -1006,7 +1010,7 @@ export default function CountryHub({
                                   >
                                     <MessageSquareReply className="w-3.5 h-3.5 text-authority" />
                                     <span>
-                                      Yanıtla ({comment.replies.length})
+                                      Reply ({comment.replies.length})
                                     </span>
                                   </button>
 
@@ -1027,8 +1031,8 @@ export default function CountryHub({
                                       )}
                                       <span>
                                         {comment.author.viewerIsFollowing
-                                          ? "Takip Ediliyor"
-                                          : "+ Takip Et"}
+                                          ? "Following"
+                                          : "+ Follow"}
                                       </span>
                                     </button>
                                   )}
@@ -1042,7 +1046,7 @@ export default function CountryHub({
                                   className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-white hover:bg-gray-200/70 text-slate hover:text-ink transition"
                                 >
                                   <Languages className="w-3.5 h-3.5 text-authority" />
-                                  <span>Çevir</span>
+                                  <span>Translate</span>
                                 </button>
                               </div>
 
@@ -1063,7 +1067,7 @@ export default function CountryHub({
                                     onChange={(e) =>
                                       setReplyText(e.target.value)
                                     }
-                                    placeholder={`@${comment.author.username} kullanıcısına yanıtınız (en az 10 karakter)...`}
+                                    placeholder={`Reply to @${comment.author.username} (minimum 10 characters)...`}
                                     className="w-full p-3 text-xs bg-white rounded-2xl focus:outline-none focus:ring-2 focus:ring-authority/25"
                                   />
                                   <div className="flex items-center justify-end gap-2">
@@ -1075,7 +1079,7 @@ export default function CountryHub({
                                       }}
                                       className="px-3 py-1.5 rounded-full text-xs text-slate hover:text-ink"
                                     >
-                                      İptal
+                                      Cancel
                                     </button>
                                     <button
                                       type="submit"
@@ -1088,8 +1092,8 @@ export default function CountryHub({
                                       <Send className="w-3 h-3" />
                                       <span>
                                         {submittingReply
-                                          ? "Gönderiliyor..."
-                                          : "Yanıtla"}
+                                          ? "Posting..."
+                                          : "Reply"}
                                       </span>
                                     </button>
                                   </div>
@@ -1142,7 +1146,7 @@ export default function CountryHub({
                                             </span>
                                             <span className="text-[11px] text-slate">
                                               •{" "}
-                                              {formatRelativeTimeTr(
+                                              {formatRelativeTime(
                                                 reply.createdAt
                                               )}
                                             </span>
@@ -1156,12 +1160,12 @@ export default function CountryHub({
                                         {replyTr && (
                                           <div className="p-2.5 bg-gray-100 rounded-xl text-xs text-ink">
                                             <span className="font-mono text-[10px] text-authority font-semibold uppercase block">
-                                              Çeviri (
+                                              Translation (
                                               {replyTr.targetLang.toUpperCase()}
                                               )
                                             </span>
                                             {replyTr.loading
-                                              ? "Çevriliyor..."
+                                              ? "Translating..."
                                               : replyTr.text}
                                           </div>
                                         )}
@@ -1193,7 +1197,7 @@ export default function CountryHub({
                                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 hover:bg-gray-200 text-slate hover:text-ink transition"
                                           >
                                             <Languages className="w-3 h-3 text-authority" />
-                                            <span>Çevir</span>
+                                            <span>Translate</span>
                                           </button>
                                         </div>
                                       </div>

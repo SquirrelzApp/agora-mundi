@@ -11,7 +11,7 @@ export async function POST(
     if (!viewer) {
       return NextResponse.json(
         {
-          error: "Takip etmek için giriş yapmalısınız.",
+          error: "Please sign in to follow users.",
           requiresAuth: true,
         },
         { status: 401 }
@@ -24,14 +24,14 @@ export async function POST(
 
     if (!target) {
       return NextResponse.json(
-        { error: "Kullanıcı bulunamadı." },
+        { error: "User not found." },
         { status: 404 }
       );
     }
 
     if (target.id === viewer.id) {
       return NextResponse.json(
-        { error: "Kendinizi takip edemezsiniz." },
+        { error: "You cannot follow yourself." },
         { status: 400 }
       );
     }
@@ -84,7 +84,7 @@ export async function POST(
   } catch (error) {
     console.error("POST /api/users/[username]/follow error:", error);
     return NextResponse.json(
-      { error: "Takip işlemi gerçekleştirilemedi." },
+      { error: "Failed to toggle follow." },
       { status: 500 }
     );
   }

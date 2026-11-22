@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "globeTake | Küresel Sek Tartışma ve Zihinsel Rekabet Platformu",
+  title: "globeTake | Global Civic Debate & Intellectual Discourse Platform",
   description:
-    "Her yaşa, herkese hitap eden sek tartışma ve küresel gündeme yorum platformu. Irkçılık yok, küfür yok, gösteriş yok. Saf zihinsel ve politik rekabet.",
+    "An open platform for pure debate and global affairs commentary for everyone. No racism, no profanity, no noise. Pure intellectual and political competition.",
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr">
+    <html lang="en">
       <body className="min-h-screen bg-paper text-ink antialiased selection:bg-authority selection:text-white">
         {children}
       </body>

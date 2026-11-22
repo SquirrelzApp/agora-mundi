@@ -31,7 +31,7 @@ export interface PoliticalCvData {
         title: string;
         country: {
           code: string;
-          nameTr: string;
+          name: string;
           flagEmoji: string;
         };
       };
@@ -39,7 +39,7 @@ export interface PoliticalCvData {
   };
   countryInfluence: Array<{
     code: string;
-    nameTr: string;
+    name: string;
     flagEmoji: string;
     likes: number;
     commentCount: number;
@@ -152,7 +152,7 @@ export default function PoliticalCvModal({
                     className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-ink text-xs font-semibold rounded-full transition"
                   >
                     <UserCog className="w-3.5 h-3.5" />
-                    <span>Düzenle</span>
+                    <span>Edit</span>
                   </button>
                 )
               ) : (
@@ -168,8 +168,8 @@ export default function PoliticalCvModal({
                   {cvData.viewerIsFollowing && <Check className="w-3.5 h-3.5" />}
                   <span>
                     {cvData.viewerIsFollowing
-                      ? `Takip Ediliyor (${cvData.user.followerCount})`
-                      : `+ Takip Et (${cvData.user.followerCount})`}
+                      ? `Following (${cvData.user.followerCount})`
+                      : `+ Follow (${cvData.user.followerCount})`}
                   </span>
                 </button>
               )}
@@ -177,7 +177,7 @@ export default function PoliticalCvModal({
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Kapat"
+                aria-label="Close"
                 className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-slate hover:text-ink transition"
               >
                 <X className="w-4 h-4" />
@@ -190,27 +190,27 @@ export default function PoliticalCvModal({
             <div className="p-3.5 bg-gray-100/70 rounded-2xl">
               <div className="flex items-center gap-1.5 text-xs text-slate">
                 <ThumbsUp className="w-3.5 h-3.5 text-authority" />
-                <span>Beğeni</span>
+                <span>Likes</span>
               </div>
               <div className="text-lg font-bold font-mono text-ink mt-1">
-                {cvData.user.totalLikes.toLocaleString("tr-TR")}
+                {cvData.user.totalLikes.toLocaleString("en-US")}
               </div>
             </div>
 
             <div className="p-3.5 bg-gray-100/70 rounded-2xl">
               <div className="flex items-center gap-1.5 text-xs text-slate">
                 <Users className="w-3.5 h-3.5 text-authority" />
-                <span>Takipçi</span>
+                <span>Followers</span>
               </div>
               <div className="text-lg font-bold font-mono text-ink mt-1">
-                {cvData.user.followerCount.toLocaleString("tr-TR")}
+                {cvData.user.followerCount.toLocaleString("en-US")}
               </div>
             </div>
 
             <div className="p-3.5 bg-gray-100/70 rounded-2xl">
               <div className="flex items-center gap-1.5 text-xs text-slate">
                 <MessageCircle className="w-3.5 h-3.5 text-authority" />
-                <span>Yorum</span>
+                <span>Comments</span>
               </div>
               <div className="text-lg font-bold font-mono text-ink mt-1">
                 {cvData.user.comments.length}
@@ -221,11 +221,11 @@ export default function PoliticalCvModal({
           {/* User's Comments */}
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate mb-2.5">
-              Yorumlar ({cvData.user.comments.length})
+              Comments ({cvData.user.comments.length})
             </h3>
             {cvData.user.comments.length === 0 ? (
               <div className="p-6 bg-gray-50 rounded-2xl text-center text-xs text-slate">
-                Henüz bir ülke gündemine yorum yapmamış.
+                No comments on any country agenda yet.
               </div>
             ) : (
               <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
@@ -249,7 +249,7 @@ export default function PoliticalCvModal({
                         className="font-semibold text-authority hover:underline text-left truncate"
                       >
                         {c.agendaItem.country.flagEmoji}{" "}
-                        {c.agendaItem.country.nameTr} —{" "}
+                        {c.agendaItem.country.name} —{" "}
                         <span className="font-normal text-slate">
                           {c.agendaItem.title}
                         </span>
@@ -270,7 +270,7 @@ export default function PoliticalCvModal({
                         className="inline-flex items-center gap-1 text-xs text-authority hover:underline"
                       >
                         <ExternalLink className="w-3 h-3" />
-                        Kaynak Bağlantısı
+                        Source Link
                       </a>
                     )}
                   </article>

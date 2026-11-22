@@ -52,7 +52,7 @@ export default function AuthModal({
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
-  const [countryCode, setCountryCode] = useState("TR");
+  const [countryCode, setCountryCode] = useState("US");
   const [title, setTitle] = useState("");
   const [bio, setBio] = useState("");
 
@@ -120,13 +120,13 @@ export default function AuthModal({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Giriş yapılamadı.");
+        setError(data.error || "Sign in failed.");
         return;
       }
       onSuccess(data.user);
       onClose();
     } catch {
-      setError("Sunucuyla bağlantı kurulamadı.");
+      setError("Unable to connect to the server.");
     } finally {
       setLoading(false);
     }
@@ -146,19 +146,19 @@ export default function AuthModal({
           displayName: displayName || username,
           password,
           countryCode,
-          title: title || "Küresel Gündem Yorumcusu",
+          title: title || "Global Affairs Commentator",
           bio,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Kayıt işlemi başarısız oldu.");
+        setError(data.error || "Registration failed.");
         return;
       }
       onSuccess(data.user);
       onClose();
     } catch {
-      setError("Sunucuyla bağlantı kurulamadı.");
+      setError("Unable to connect to the server.");
     } finally {
       setLoading(false);
     }
@@ -176,13 +176,13 @@ export default function AuthModal({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Profil güncellenemedi.");
+        setError(data.error || "Failed to update profile.");
         return;
       }
       onSuccess(data.user);
       onClose();
     } catch {
-      setError("Profil güncellenirken hata oluştu.");
+      setError("An error occurred while updating your profile.");
     } finally {
       setLoading(false);
     }
@@ -215,23 +215,23 @@ export default function AuthModal({
                 className="font-serif font-bold text-lg text-ink"
               >
                 {activeTab === "profile"
-                  ? "Profil Ayarlarım"
+                  ? "Profile Settings"
                   : activeTab === "register"
-                  ? "globeTake'e Katıl"
-                  : "Giriş Yap"}
+                  ? "Join globeTake"
+                  : "Sign In"}
               </h2>
               <p className="text-xs text-slate mt-0.5">
                 {contextHint ||
                   (activeTab === "profile"
-                    ? "Görünür kimliğinizi ve uzmanlık başlığınızı düzenleyin."
-                    : "174 ülkenin canlı gündemini tartışın ve fikirlerinizi paylaşın.")}
+                    ? "Customize your public identity and profile details."
+                    : "Discuss live agendas across 174 countries and share your perspective.")}
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
               className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-slate hover:text-ink transition"
-              aria-label="Kapat"
+              aria-label="Close"
             >
               <X className="w-4 h-4" />
             </button>
@@ -253,7 +253,7 @@ export default function AuthModal({
                 }`}
               >
                 <LogIn className="w-3.5 h-3.5" />
-                <span>Giriş Yap</span>
+                <span>Sign In</span>
               </button>
               <button
                 type="button"
@@ -268,7 +268,7 @@ export default function AuthModal({
                 }`}
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                <span>Kayıt Ol</span>
+                <span>Sign Up</span>
               </button>
             </div>
           )}
@@ -287,9 +287,11 @@ export default function AuthModal({
                 href="/api/auth/google"
                 className="w-full py-2.5 px-4 rounded-2xl bg-gray-100 hover:bg-gray-200/80 text-xs font-semibold text-ink flex items-center justify-center gap-2 transition"
               >
-                <span>🌐 Google Hesabı ile Devam Et</span>
+                <span>🌐 Continue with Google</span>
               </a>
-              <div className="text-center text-[11px] text-slate">veya e-posta ile</div>
+              <div className="text-center text-[11px] text-slate">
+                or continue with email
+              </div>
             </div>
           )}
 
@@ -298,21 +300,21 @@ export default function AuthModal({
             <form onSubmit={handleLogin} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-ink mb-1">
-                  E-posta veya Kullanıcı Adı
+                  Email or Username
                 </label>
                 <input
                   type="text"
                   required
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="ornek@eposta.com veya kullanici_adi"
+                  placeholder="you@example.com or username"
                   className="w-full px-4 py-2.5 text-sm bg-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-authority/25"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-ink mb-1">
-                  Şifre
+                  Password
                 </label>
                 <input
                   type="password"
@@ -330,7 +332,7 @@ export default function AuthModal({
                 disabled={loading}
                 className="w-full py-3 rounded-2xl bg-authority text-white text-xs font-semibold shadow-md hover:opacity-95 disabled:opacity-50 transition"
               >
-                {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
+                {loading ? "Signing in..." : "Sign In"}
               </button>
             </form>
           )}
@@ -341,7 +343,7 @@ export default function AuthModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-xs font-semibold text-ink mb-1">
-                    Kullanıcı Adı *
+                    Username *
                   </label>
                   <input
                     type="text"
@@ -350,13 +352,13 @@ export default function AuthModal({
                     maxLength={24}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="emre_yilmaz"
+                    placeholder="alex_morgan"
                     className="w-full px-3.5 py-2 text-xs bg-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-authority/25 font-mono"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-ink mb-1">
-                    Görünen Ad *
+                    Display Name *
                   </label>
                   <input
                     type="text"
@@ -364,7 +366,7 @@ export default function AuthModal({
                     maxLength={50}
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Emre Yılmaz"
+                    placeholder="Alex Morgan"
                     className="w-full px-3.5 py-2 text-xs bg-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-authority/25"
                   />
                 </div>
@@ -372,14 +374,14 @@ export default function AuthModal({
 
               <div>
                 <label className="block text-xs font-semibold text-ink mb-1">
-                  E-posta Adresi *
+                  Email Address *
                 </label>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="emre@ornek.com"
+                  placeholder="alex@example.com"
                   className="w-full px-3.5 py-2 text-xs bg-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-authority/25"
                 />
               </div>
@@ -387,7 +389,7 @@ export default function AuthModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-xs font-semibold text-ink mb-1">
-                    Şifre (En az 6 kr.) *
+                    Password (Min. 6 chars) *
                   </label>
                   <input
                     type="password"
@@ -402,7 +404,7 @@ export default function AuthModal({
 
                 <div>
                   <label className="block text-xs font-semibold text-ink mb-1">
-                    Ülke
+                    Country
                   </label>
                   <select
                     value={countryCode}
@@ -411,7 +413,7 @@ export default function AuthModal({
                   >
                     {countries.map((c) => (
                       <option key={c.code} value={c.code}>
-                        {c.flagEmoji} {c.nameTr}
+                        {c.flagEmoji} {c.name}
                       </option>
                     ))}
                   </select>
@@ -423,7 +425,7 @@ export default function AuthModal({
                 disabled={loading}
                 className="w-full py-3 rounded-2xl bg-authority text-white text-xs font-semibold shadow-md hover:opacity-95 disabled:opacity-50 transition"
               >
-                {loading ? "Hesap oluşturuluyor..." : "Hesap Oluştur ve Katıl"}
+                {loading ? "Creating account..." : "Create Account & Join"}
               </button>
             </form>
           )}
@@ -450,7 +452,7 @@ export default function AuthModal({
 
               <div>
                 <label className="block text-xs font-semibold text-ink mb-1">
-                  Görünen Ad
+                  Display Name
                 </label>
                 <input
                   type="text"
@@ -464,21 +466,21 @@ export default function AuthModal({
 
               <div>
                 <label className="block text-xs font-semibold text-ink mb-1">
-                  Kısa Biyografi
+                  Short Bio
                 </label>
                 <textarea
                   rows={2}
                   maxLength={280}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  placeholder="Kendinizden ve ilgi duyduğunuz bölgelerden bahsedin..."
+                  placeholder="Tell others about yourself and the regions you follow..."
                   className="w-full px-3.5 py-2 text-xs bg-gray-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-authority/25"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-ink mb-1">
-                  Ülke
+                  Country
                 </label>
                 <select
                   value={countryCode}
@@ -487,7 +489,7 @@ export default function AuthModal({
                 >
                   {countries.map((c) => (
                     <option key={c.code} value={c.code}>
-                      {c.flagEmoji} {c.nameTr}
+                      {c.flagEmoji} {c.name}
                     </option>
                   ))}
                 </select>
@@ -501,7 +503,7 @@ export default function AuthModal({
                   className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-semibold transition"
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span>Çıkış Yap</span>
+                  <span>Sign Out</span>
                 </button>
 
                 <button
@@ -510,7 +512,7 @@ export default function AuthModal({
                   className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-2xl bg-authority text-white text-xs font-semibold shadow-sm hover:opacity-95 transition"
                 >
                   <UserCog className="w-3.5 h-3.5" />
-                  <span>{loading ? "Kaydediliyor..." : "Kaydet"}</span>
+                  <span>{loading ? "Saving..." : "Save Changes"}</span>
                 </button>
               </div>
             </form>

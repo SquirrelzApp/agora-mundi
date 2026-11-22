@@ -18,12 +18,12 @@ const IMAGE_OR_MEDIA_REGEX =
   /(!\[.*?\]\(.*?\))|(<img\b|<video\b|<iframe\b)|(https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|mp4|webm|mov|avi|mkv)(?:\?\S*)?)/i;
 
 const FALLBACK_PROFANITY_PATTERNS = [
-  /\b(amk|aq|oç|orospu|piç|sikik|siktir|göt|yavşak|kahpe|ibne|geri\s*zekalı|aptal\s*herif|vatan\s*haini\s*köpek|belasını\s*versin|gebersin)\b/i,
-  /\b(fuck|shit|bitch|asshole|cunt|retard|subhuman|parasites|kill\s*all)\b/i,
+  /\b(fuck|fucking|shit|bitch|asshole|cunt|retard|motherfucker|bastard|dickhead)\b/i,
+  /\b(amk|aq|oç|orospu|piç|sikik|siktir|yavşak|kahpe)\b/i,
 ];
 
 const FALLBACK_RACISM_PATTERNS = [
-  /\b(alt\s*ırk|kökünü\s*kazımak|hepsini\s*yakmak|ırkını\s*sikeyim|aşağılık\s*ırk|soykırım\s*müstehak|subhuman|ethnic\s*cleansing\s*now)\b/i,
+  /\b(subhuman|ethnic\s*cleansing\s*now|kill\s*all\s+\w+|inferior\s*race|genocide\s*deserved|white\s*supremacy\s*now)\b/i,
 ];
 
 export const MIN_COMMENT_LENGTH = 10;
@@ -39,7 +39,7 @@ export function validateStructuralRules(
     return {
       approved: false,
       violationCategory: "CHAR_LIMIT",
-      reason: `Yorumunuz en az ${MIN_COMMENT_LENGTH} karakter olmalıdır.`,
+      reason: `Your comment must be at least ${MIN_COMMENT_LENGTH} characters long.`,
       qualityScore: 0,
     };
   }
@@ -48,7 +48,7 @@ export function validateStructuralRules(
     return {
       approved: false,
       violationCategory: "CHAR_LIMIT",
-      reason: `Yorumunuz ${MAX_COMMENT_LENGTH} karakter sınırını aşıyor.`,
+      reason: `Your comment exceeds the ${MAX_COMMENT_LENGTH}-character limit.`,
       qualityScore: 0,
     };
   }
@@ -61,7 +61,7 @@ export function validateStructuralRules(
       approved: false,
       violationCategory: "MEDIA_FORBIDDEN",
       reason:
-        "Platformda görsel, fotoğraf veya video paylaşımı kapalıdır. Metin ve harici kaynak/haber bağlantısı paylaşabilirsiniz.",
+        "Images, photos, and videos are disabled on this platform. You may share text and external news/source links.",
       qualityScore: 0,
     };
   }
@@ -71,7 +71,7 @@ export function validateStructuralRules(
     return {
       approved: false,
       violationCategory: "LOW_EFFORT_SPAM",
-      reason: "Anlamsız karakter tekrarı (spam) tespit edildi.",
+      reason: "Meaningless repeated character spam was detected.",
       qualityScore: 0,
     };
   }
@@ -102,7 +102,7 @@ export async function moderateComment(
         approved: false,
         violationCategory: "RACISM_HATE",
         reason:
-          "Irkçılık, etnik nefret söylemi veya bir topluluğu hedef alan ifadeler kesinlikle yayınlanmaz.",
+          "Racism, ethnic hate speech, or content targeting a group is strictly prohibited.",
         qualityScore: 5,
       };
     }
@@ -114,7 +114,7 @@ export async function moderateComment(
         approved: false,
         violationCategory: "PROFANITY",
         reason:
-          "Küfür, argo veya kişisel hakaret tespit edildi. Lütfen düşüncenizi saygılı bir dille ifade edin.",
+          "Profanity, slurs, or personal insults were detected. Please express your argument respectfully.",
         qualityScore: 10,
       };
     }
@@ -126,21 +126,26 @@ export async function moderateComment(
       const ai = new GoogleGenAI({ apiKey });
       const modelName = process.env.GEMINI_NEWS_MODEL || "gemini-3.5-flash-lite";
       const contextBlock = options?.isReply
-        ? `\nTür: Başka bir kullanıcı yorumuna ALT YANIT${options.parentExcerpt ? `\nÜst Yorum Özeti: "${options.parentExcerpt}"` : ""}`
-        : "\nTür: Gündem maddesine ana yorum";
+        ? `\nType: Nested REPLY to another user's comment${
+            options.parentExcerpt
+              ? `\nParent Comment Excerpt: "${options.parentExcerpt}"`
+              : ""
+          }`
+        : "\nType: Top-level comment on an agenda item";
 
       const interaction = await ai.interactions.create({
         model: modelName,
         generation_config: {
           thinking_level: "low",
         },
-        system_instruction: `Sen küresel gündem tartışma platformu globeTake'in içerik moderatörüsün.
-KESİN KURALLAR:
-1. YALNIZCA küfür, ağır argo, doğrudan kişisel hakaret, ırkçılık, etnik nefret söylemi veya rastgele klavye tuşlaması / ticari reklam bot spam'i içeren yorumları reddet (approved: false).
-2. Kısa ve net kullanıcı görüşleri (10+ karakter), sohbet tarzı alt yanıtlar (ör. "Kesinlikle katılıyorum...", "Bu noktada farklı düşünüyorum..."), sert politik eleştiriler, sorular, harici haber/makale linkleri ve dolaylı tartışmalar HER ZAMAN ONAYLANMALIDIR (approved: true, violationCategory: "NONE").
-3. Bir yorumu veya alt yanıtı salt "başlıkla doğrudan kelimesi kelimesine örtüşmüyor" veya "kısa katılma/itiraz cümlesi" diye ASLA reddetme (LOW_EFFORT_SPAM yalnızca anlamsız harf dizileri veya reklam botları içindir).
-4. Yorumun katkı ve ifade kalitesini 1-100 arasında puanla (qualityScore).`,
-        input: `Ülke: ${countryName}\nGündem Başlığı: ${agendaTitle}${contextBlock}\nKullanıcı Yorumu: "${commentText}"`,
+        system_instruction: `You are the content moderator for globeTake, a global civic discourse platform.
+STRICT RULES:
+1. ONLY reject (approved: false) comments containing profanity, severe slurs, direct personal insults, racism, ethnic hate speech, or random keyboard-mash / commercial ad bot spam.
+2. Concise user opinions (10+ characters), conversational replies (e.g., "I completely agree...", "I see this differently..."), sharp political critiques, questions, external news/article links, and tangential discussion MUST ALWAYS BE APPROVED (approved: true, violationCategory: "NONE").
+3. NEVER reject a comment or reply merely for not repeating headline keywords or being brief agreement/disagreement (LOW_EFFORT_SPAM is strictly for gibberish or ad bots).
+4. If rejected, write "reason" in clear, polite English.
+5. Score the comment's intellectual contribution and clarity from 1 to 100 (qualityScore).`,
+        input: `Country: ${countryName}\nAgenda Headline: ${agendaTitle}${contextBlock}\nUser Comment: "${commentText}"`,
         response_format: {
           type: "text",
           mime_type: "application/json",

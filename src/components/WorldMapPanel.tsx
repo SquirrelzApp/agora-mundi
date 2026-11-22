@@ -40,8 +40,7 @@ export interface AgendaSummary {
 
 export interface CountrySummary {
   code: string;
-  nameTr: string;
-  nameEn?: string;
+  name: string;
   capital?: string | null;
   region: string;
   subregion?: string | null;
@@ -648,7 +647,7 @@ export default function WorldMapPanel({
         let boxY2 = py + 8;
 
         if (wantBadge) {
-          const labelText = `${country.flagEmoji} ${country.nameTr}`;
+          const labelText = `${country.flagEmoji} ${country.name}`;
           const textW = ctx.measureText(labelText).width;
           const pillW = Math.ceil(textW + 16);
           const pillH = 21;
@@ -1117,7 +1116,7 @@ export default function WorldMapPanel({
             onPointerCancel={handlePointerUpOrCancel}
             onPointerLeave={handlePointerLeave}
             role="img"
-            aria-label="İnteraktif 3B Dünya Küresi"
+            aria-label="Interactive 3D World Globe"
             className="w-full h-full block rounded-full select-none touch-none cursor-grab"
           />
         </div>
@@ -1129,8 +1128,8 @@ export default function WorldMapPanel({
               <div className="inline-flex items-center gap-2 text-xs text-slate">
                 <Compass className="w-3.5 h-3.5 text-authority shrink-0" />
                 <span>
-                  Küreyi çevirerek komşu ülkelere geçebilir veya tam haritaya
-                  dönebilirsiniz
+                  Spin the globe to switch to neighboring countries or return to
+                  the full view
                 </span>
               </div>
 
@@ -1139,7 +1138,7 @@ export default function WorldMapPanel({
                   type="button"
                   onClick={handleZoomIn}
                   className="p-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-ink transition"
-                  title="Yakınlaştır"
+                  title="Zoom In"
                 >
                   <ZoomIn className="w-3.5 h-3.5" />
                 </button>
@@ -1147,7 +1146,7 @@ export default function WorldMapPanel({
                   type="button"
                   onClick={handleZoomOut}
                   className="p-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-ink transition"
-                  title="Uzaklaştır"
+                  title="Zoom Out"
                 >
                   <ZoomOut className="w-3.5 h-3.5" />
                 </button>
@@ -1156,7 +1155,7 @@ export default function WorldMapPanel({
                     type="button"
                     onClick={handleResetView}
                     className="p-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-slate hover:text-ink transition"
-                    title="Görünümü Sıfırla"
+                    title="Reset View"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                   </button>
@@ -1167,7 +1166,7 @@ export default function WorldMapPanel({
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-authority text-white text-xs font-semibold shadow-xs hover:opacity-95 transition"
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
-                  <span>Küreyi Büyüt</span>
+                  <span>Expand Globe</span>
                 </button>
               </div>
             </div>
@@ -1187,7 +1186,7 @@ export default function WorldMapPanel({
                         : "bg-gray-100/85 text-ink hover:bg-gray-200/80"
                     }`}
                   >
-                    {c.flagEmoji} {c.nameTr}
+                    {c.flagEmoji} {c.name}
                   </button>
                 );
               })}
@@ -1198,15 +1197,15 @@ export default function WorldMapPanel({
                   onClick={onOpenExplorer}
                   className="lg:hidden shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold bg-authority/10 text-authority hover:bg-authority/15 transition"
                 >
-                  Tüm Ülkeler ({countries.length})
+                  All Countries ({countries.length})
                 </button>
               )}
             </div>
 
             {hoveredCountry && hoveredCountry.code !== activeCountry?.code && (
               <div className="text-[11px] text-authority font-medium truncate">
-                Seçmek için tıklayın: {hoveredCountry.flagEmoji}{" "}
-                <strong>{hoveredCountry.nameTr}</strong> ({hoveredCountry.region})
+                Click to select: {hoveredCountry.flagEmoji}{" "}
+                <strong>{hoveredCountry.name}</strong> ({hoveredCountry.region})
               </div>
             )}
           </div>
@@ -1218,8 +1217,8 @@ export default function WorldMapPanel({
                 type="button"
                 onClick={handleZoomIn}
                 className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-200/60 text-ink transition active:scale-95"
-                title="Yakınlaştır"
-                aria-label="Yakınlaştır"
+                title="Zoom In"
+                aria-label="Zoom In"
               >
                 <ZoomIn className="w-4 h-4 text-authority" />
               </button>
@@ -1228,8 +1227,8 @@ export default function WorldMapPanel({
                 type="button"
                 onClick={handleZoomOut}
                 className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-200/60 text-ink transition active:scale-95"
-                title="Uzaklaştır"
-                aria-label="Uzaklaştır"
+                title="Zoom Out"
+                aria-label="Zoom Out"
               >
                 <ZoomOut className="w-4 h-4 text-authority" />
               </button>
@@ -1242,8 +1241,8 @@ export default function WorldMapPanel({
                     ? "bg-authority/10 text-authority"
                     : "hover:bg-gray-200/60 text-slate"
                 }`}
-                title={autoRotate ? "Otomatik Dönüşü Durdur" : "Otomatik Döndür"}
-                aria-label="Otomatik Dönüş"
+                title={autoRotate ? "Pause Auto-Rotate" : "Auto-Rotate"}
+                aria-label="Toggle Auto-Rotate"
               >
                 {autoRotate ? (
                   <Pause className="w-3.5 h-3.5" />
@@ -1257,8 +1256,8 @@ export default function WorldMapPanel({
                   type="button"
                   onClick={handleResetView}
                   className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-200/60 text-slate hover:text-ink transition"
-                  title="Görünümü Sıfırla"
-                  aria-label="Görünümü Sıfırla"
+                  title="Reset View"
+                  aria-label="Reset View"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
@@ -1275,7 +1274,7 @@ export default function WorldMapPanel({
                     </span>
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-ink truncate">
-                        {hoveredCountry.nameTr}
+                        {hoveredCountry.name}
                       </div>
                       <div className="text-[11px] text-slate truncate">
                         {hoveredCountry.capital
@@ -1286,7 +1285,7 @@ export default function WorldMapPanel({
                     </div>
                   </div>
                   <span className="shrink-0 px-2.5 py-0.5 rounded-full bg-authority text-white text-[10px] font-semibold">
-                    Gündemi Aç →
+                    Open Agenda →
                   </span>
                 </div>
                 {hoveredCountry.agendas?.[0]?.title && (
@@ -1306,9 +1305,9 @@ export default function WorldMapPanel({
           <div className="flex items-center justify-center gap-2 text-xs text-slate text-center">
             <Sparkles className="w-3.5 h-3.5 text-authority shrink-0" />
             <span>
-              Küre üzerinde herhangi bir ülkeye tıklayın; küre küçülecek ve o
-              ülkenin <strong>canlı 3 gündemi</strong> ile tartışma alanı hemen
-              altında anında açılacaktır.
+              Click any country on the globe to shrink the map and instantly
+              open its <strong>3 live agendas</strong> and discussion feed
+              below.
             </span>
           </div>
 
@@ -1320,7 +1319,7 @@ export default function WorldMapPanel({
                 onClick={() => triggerSelectCountry(c.code)}
                 className="px-3.5 py-1.5 rounded-full text-xs font-medium bg-white/90 text-ink hover:bg-authority hover:text-white shadow-[0_2px_10px_rgb(0,0,0,0.04)] transition-all"
               >
-                {c.flagEmoji} {c.nameTr}
+                {c.flagEmoji} {c.name}
               </button>
             ))}
 
@@ -1330,7 +1329,7 @@ export default function WorldMapPanel({
                 onClick={onOpenExplorer}
                 className="lg:hidden px-3.5 py-1.5 rounded-full text-xs font-semibold bg-authority text-white shadow-sm"
               >
-                Tüm Ülkeler ({countries.length})
+                All Countries ({countries.length})
               </button>
             )}
           </div>

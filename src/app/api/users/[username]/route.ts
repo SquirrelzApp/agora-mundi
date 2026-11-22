@@ -36,7 +36,7 @@ export async function GET(
                 country: {
                   select: {
                     code: true,
-                    nameTr: true,
+                    name: true,
                     flagEmoji: true,
                   },
                 },
@@ -49,7 +49,7 @@ export async function GET(
 
     if (!user) {
       return NextResponse.json(
-        { error: "Kullanıcı bulunamadı." },
+        { error: "User not found." },
         { status: 404 }
       );
     }
@@ -71,7 +71,7 @@ export async function GET(
       string,
       {
         code: string;
-        nameTr: string;
+        name: string;
         flagEmoji: string;
         likes: number;
         commentCount: number;
@@ -83,7 +83,7 @@ export async function GET(
       if (!countryBreakdownMap[country.code]) {
         countryBreakdownMap[country.code] = {
           code: country.code,
-          nameTr: country.nameTr,
+          name: country.name,
           flagEmoji: country.flagEmoji,
           likes: 0,
           commentCount: 0,
@@ -106,7 +106,7 @@ export async function GET(
   } catch (error) {
     console.error("GET /api/users/[username] error:", error);
     return NextResponse.json(
-      { error: "Profil bilgileri alınamadı." },
+      { error: "Failed to load user profile." },
       { status: 500 }
     );
   }

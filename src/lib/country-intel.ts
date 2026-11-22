@@ -1,12 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { translateWithGoogle } from "@/lib/google-translate";
 import { getWorldCountryMetaByCode } from "@/lib/world-countries";
 
 /**
- * Canlı Ülke İstihbarat Servisi (Sıfır API Anahtarı, Hızlı Önbellekli)
- * 1. Wikipedia REST v1 (tr.wikipedia.org + en.wikipedia.org yedeği): Gerçek ülke özeti ve görseli
- * 2. Wikidata P1082: Güncel resmi ülke nüfusu
- * 3. Open ExchangeRate API (open.er-api.com): Tüm para birimleri için canlı USD ve TRY kurları
+ * Live Country Intelligence Service (Zero API Keys, Fast Cached, English-Only)
+ * 1. English Wikipedia REST v1 (en.wikipedia.org): Real country overview & thumbnail
+ * 2. Wikidata P1082: Current official country population
+ * 3. Open ExchangeRate API (open.er-api.com): Live USD exchange rates for all currencies
  */
 
 let cachedRates: {
@@ -22,7 +21,7 @@ async function getUsdExchangeRates(): Promise<Record<string, number> | null> {
 
   try {
     const res = await fetch("https://open.er-api.com/v6/latest/USD", {
-      headers: { "User-Agent": "AgoraMundi/1.0" },
+      headers: { "User-Agent": "globeTake/1.0" },
       cache: "no-store",
       signal: AbortSignal.timeout(4000),
     });
@@ -41,77 +40,53 @@ async function getUsdExchangeRates(): Promise<Record<string, number> | null> {
   return cachedRates?.rates || null;
 }
 
-const WIKI_TR_TITLE_OVERRIDES: Record<string, string> = {
-  XK_NCY: "Kuzey_Kıbrıs_Türk_Cumhuriyeti",
-  XK: "Kosova",
-  US: "Amerika_Birleşik_Devletleri",
-  GB: "Birleşik_Krallık",
-  PS: "Filistin_Devleti",
-  CD: "Kongo_Demokratik_Cumhuriyeti",
-  CG: "Kongo_Cumhuriyeti",
-  KR: "Güney_Kore",
-  KP: "Kuzey_Kore",
-  CZ: "Çekya",
-  AE: "Birleşik_Arap_Emirlikleri",
-  ZA: "Güney_Afrika_Cumhuriyeti",
+const WIKI_EN_TITLE_OVERRIDES: Record<string, string> = {
+  GE: "Georgia_(country)",
+  XK_NCY: "Northern_Cyprus",
+  XK: "Kosovo",
+  US: "United_States",
+  GB: "United_Kingdom",
+  PS: "Palestine",
+  CD: "Democratic_Republic_of_the_Congo",
+  CG: "Republic_of_the_Congo",
+  KR: "South_Korea",
+  KP: "North_Korea",
+  CZ: "Czech_Republic",
+  AE: "United_Arab_Emirates",
+  ZA: "South_Africa",
+  TR: "Turkey",
+  CI: "Ivory_Coast",
+  MK: "North_Macedonia",
+  TW: "Taiwan",
 };
 
 async function fetchWikipediaSummary(
   code: string,
-  nameTr: string,
-  nameEn: string
+  name: string
 ): Promise<{
-  summaryTr: string | null;
+  summary: string | null;
   wikiUrl: string | null;
   thumbnailUrl: string | null;
 }> {
-  const trSlug =
-    WIKI_TR_TITLE_OVERRIDES[code] || nameTr.trim().replace(/\s+/g, "_");
+  const enSlug =
+    WIKI_EN_TITLE_OVERRIDES[code] || name.trim().replace(/\s+/g, "_");
 
-  // 1. Try Turkish Wikipedia REST v1
   try {
-    const trUrl = `https://tr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
-      trSlug
-    )}`;
-    const res = await fetch(trUrl, {
-      headers: { "User-Agent": "AgoraMundi/1.0" },
-      signal: AbortSignal.timeout(3500),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (typeof data?.extract === "string" && data.extract.length > 40) {
-        return {
-          summaryTr: data.extract.slice(0, 650),
-          wikiUrl:
-            data?.content_urls?.desktop?.page ||
-            `https://tr.wikipedia.org/wiki/${encodeURIComponent(trSlug)}`,
-          thumbnailUrl: data?.thumbnail?.source || null,
-        };
-      }
-    }
-  } catch {
-    // Fallback to English Wikipedia
-  }
-
-  // 2. Fallback to English Wikipedia + Google Translate
-  try {
-    const enSlug = nameEn.trim().replace(/\s+/g, "_");
     const enUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
       enSlug
     )}`;
     const res = await fetch(enUrl, {
-      headers: { "User-Agent": "AgoraMundi/1.0" },
-      signal: AbortSignal.timeout(3500),
+      headers: {
+        "User-Agent": "globeTake/1.0 (https://globetake.app; contact@globetake.app)",
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(5000),
     });
     if (res.ok) {
       const data = await res.json();
       if (typeof data?.extract === "string" && data.extract.length > 40) {
-        const trExtract = await translateWithGoogle(
-          data.extract.slice(0, 500),
-          "tr"
-        );
         return {
-          summaryTr: trExtract.translatedText,
+          summary: data.extract.slice(0, 650),
           wikiUrl:
             data?.content_urls?.desktop?.page ||
             `https://en.wikipedia.org/wiki/${encodeURIComponent(enSlug)}`,
@@ -120,20 +95,23 @@ async function fetchWikipediaSummary(
       }
     }
   } catch {
-    // ignore
+    // ignore network error
   }
 
-  return { summaryTr: null, wikiUrl: null, thumbnailUrl: null };
+  return { summary: null, wikiUrl: null, thumbnailUrl: null };
 }
 
-async function fetchWikidataPopulation(nameEn: string): Promise<number | null> {
+async function fetchWikidataPopulation(name: string): Promise<number | null> {
   try {
     const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&sites=enwiki&titles=${encodeURIComponent(
-      nameEn
+      name
     )}&props=claims&format=json`;
     const res = await fetch(url, {
-      headers: { "User-Agent": "AgoraMundi/1.0" },
-      signal: AbortSignal.timeout(3500),
+      headers: {
+        "User-Agent": "globeTake/1.0 (https://globetake.app; contact@globetake.app)",
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return null;
     const json = await res.json();
@@ -179,48 +157,42 @@ export async function ensureCountryIntelligence(
       const isFresh =
         country.infoSyncedAt &&
         Date.now() - country.infoSyncedAt.getTime() < TWENTY_FOUR_HOURS_MS &&
-        Boolean(country.summaryTr);
+        Boolean(country.summary);
 
       if (isFresh) return;
 
       const meta = getWorldCountryMetaByCode(code);
-      const nameEn = country.nameEn || meta?.nameEn || country.nameTr;
+      const name = country.name || meta?.name || code;
       const currencyCode = country.currencyCode || meta?.currencyCode || null;
 
       const [wiki, population, rates] = await Promise.all([
-        country.summaryTr
+        country.summary
           ? Promise.resolve({
-              summaryTr: country.summaryTr,
+              summary: country.summary,
               wikiUrl: country.wikiUrl,
               thumbnailUrl: country.thumbnailUrl,
             })
-          : fetchWikipediaSummary(code, country.nameTr, nameEn),
+          : fetchWikipediaSummary(code, name),
         country.population
           ? Promise.resolve(country.population)
-          : fetchWikidataPopulation(nameEn),
+          : fetchWikidataPopulation(name),
         getUsdExchangeRates(),
       ]);
 
       let usdRate: number | null = country.usdRate;
-      let tryRate: number | null = country.tryRate;
 
       if (rates && currencyCode && rates[currencyCode]) {
         usdRate = rates[currencyCode]; // 1 USD = X local currency
-        if (rates.TRY && usdRate > 0) {
-          // 1 unit of local currency = (TRY per USD) / (Local per USD) TRY
-          tryRate = Number((rates.TRY / usdRate).toFixed(4));
-        }
       }
 
       await prisma.country.update({
         where: { code },
         data: {
-          summaryTr: wiki.summaryTr ?? country.summaryTr,
+          summary: wiki.summary ?? country.summary,
           wikiUrl: wiki.wikiUrl ?? country.wikiUrl,
           thumbnailUrl: wiki.thumbnailUrl ?? country.thumbnailUrl,
           population: population ?? country.population,
           usdRate,
-          tryRate,
           infoSyncedAt: new Date(),
         },
       });

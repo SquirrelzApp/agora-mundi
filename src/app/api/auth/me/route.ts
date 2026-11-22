@@ -17,7 +17,7 @@ export async function PATCH(request: NextRequest) {
     const currentUser = await getCurrentUser();
     if (!currentUser) {
       return NextResponse.json(
-        { error: "Oturum açmanız gerekiyor." },
+        { error: "Please sign in first." },
         { status: 401 }
       );
     }
@@ -44,7 +44,7 @@ export async function PATCH(request: NextRequest) {
       where: { id: currentUser.id },
       data: {
         displayName: displayName || currentUser.displayName,
-        title: title || "Küresel Gündem Yorumcusu",
+        title: title || "Global Affairs Commentator",
         bio,
         countryCode,
       },
@@ -70,7 +70,7 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     console.error("PATCH /api/auth/me error:", error);
     return NextResponse.json(
-      { error: "Profil güncellenemedi." },
+      { error: "Failed to update profile." },
       { status: 500 }
     );
   }

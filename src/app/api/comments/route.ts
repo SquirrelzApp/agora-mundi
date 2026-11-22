@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     if (!currentUser) {
       return NextResponse.json(
         {
-          error: "Yorum yapmak veya yanıt vermek için giriş yapmalısınız.",
+          error: "Please sign in to post a comment or reply.",
           requiresAuth: true,
         },
         { status: 401 }
@@ -21,14 +21,14 @@ export async function POST(request: NextRequest) {
       agendaItemId,
       parentId,
       content,
-      stanceTag = "YORUM",
+      stanceTag = "COMMENT",
       sourceUrl,
-      languageCode = "tr",
+      languageCode = "en",
     } = body;
 
     if (!agendaItemId || typeof content !== "string") {
       return NextResponse.json(
-        { error: "Gündem başlığı ve yorum metni zorunludur." },
+        { error: "Agenda item and comment text are required." },
         { status: 400 }
       );
     }
@@ -40,8 +40,7 @@ export async function POST(request: NextRequest) {
         if (!["http:", "https:"].includes(parsedUrl.protocol)) {
           return NextResponse.json(
             {
-              error:
-                "Kaynak bağlantısı geçerli bir http/https adresi olmalıdır.",
+              error: "Source link must be a valid http/https URL.",
             },
             { status: 400 }
           );
@@ -49,7 +48,7 @@ export async function POST(request: NextRequest) {
         cleanSourceUrl = parsedUrl.toString();
       } catch {
         return NextResponse.json(
-          { error: "Geçersiz harici kaynak bağlantısı formatı." },
+          { error: "Invalid external source URL format." },
           { status: 400 }
         );
       }
@@ -62,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     if (!agendaItem) {
       return NextResponse.json(
-        { error: "Gündem maddesi bulunamadı." },
+        { error: "Agenda item not found." },
         { status: 404 }
       );
     }
@@ -75,7 +74,7 @@ export async function POST(request: NextRequest) {
       });
       if (!parentComment || parentComment.agendaItemId !== agendaItemId) {
         return NextResponse.json(
-          { error: "Yanıtlanacak yorum bulunamadı." },
+          { error: "Parent comment not found." },
           { status: 404 }
         );
       }
@@ -85,7 +84,7 @@ export async function POST(request: NextRequest) {
     }
 
     const moderation = await moderateComment(
-      agendaItem.country.nameTr,
+      agendaItem.country.name,
       agendaItem.title,
       content,
       cleanSourceUrl,
@@ -104,7 +103,7 @@ export async function POST(request: NextRequest) {
           violationCategory: moderation.violationCategory,
           reason:
             moderation.reason ||
-            "Topluluk kurallarına aykırı içerik tespit edildi.",
+            "Content violated community guidelines.",
         },
       });
 
@@ -186,7 +185,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("POST /api/comments error:", error);
     return NextResponse.json(
-      { error: "Yorum gönderilirken bir hata oluştu." },
+      { error: "Failed to submit comment." },
       { status: 500 }
     );
   }

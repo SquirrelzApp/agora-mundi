@@ -42,11 +42,11 @@ function tempoPriority(tempo: string): number {
 }
 
 /**
- * Tek bir arka plan tarama döngüsü:
- * Süresi dolmuş veya henüz senkronize edilmemiş ülkelerin haberlerini çeker,
- * Gemini 3.5 Flash-Lite ile formatlayıp doğrudan veritabanına yazar.
+ * Single background ingestion cycle:
+ * Fetches live English news for countries that are due or unsynced,
+ * curates them via Gemini 3.5 Flash-Lite, and persists directly to PostgreSQL.
  */
-export async function runSchedulerCycle(maxCountries = 24): Promise<number> {
+export async function runSchedulerCycle(maxCountries = 50): Promise<number> {
   const state = getState();
   if (state.running) return 0;
 
@@ -71,7 +71,7 @@ export async function runSchedulerCycle(maxCountries = 24): Promise<number> {
 
     const nowMs = Date.now();
 
-    // 1. Find countries due for fresh news + Gemini curation
+    // 1. Find countries due for fresh English news + Gemini curation
     const dueForAgendas = allCountries
       .filter((c) => {
         if (!c.lastSyncedAt || c._count.agendas < 3) return true;
@@ -159,7 +159,7 @@ export function startBackgroundNewsScheduler(): void {
   state.timer = timer;
 
   console.log(
-    `[agora-mundi] Otonom Haber & Gemini 3.5 zamanlayıcısı aktif (kontrol döngüsü: ${SCHEDULER_TICK_MINUTES} dk | HOT: 1s, MODERATE: 3s, STABLE: 6s)`
+    `[globeTake] Autonomous English News & Gemini 3.5 scheduler active (tick: ${SCHEDULER_TICK_MINUTES}m | HOT: 1h, MODERATE: 3h, STABLE: 6h)`
   );
 }
 

@@ -8,7 +8,7 @@ export async function POST() {
   } catch (error) {
     console.error("POST /api/auth/logout error:", error);
     return NextResponse.json(
-      { error: "Çıkış yapılamadı." },
+      { error: "Failed to sign out." },
       { status: 500 }
     );
   }

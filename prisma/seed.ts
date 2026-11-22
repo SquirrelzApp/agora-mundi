@@ -6,25 +6,25 @@ import { ensureCountryIntelligence } from "../src/lib/country-intel";
 const prisma = new PrismaClient();
 
 const INITIAL_WARM_CODES = [
-  "TR",
   "US",
-  "DE",
   "GB",
-  "AZ",
+  "DE",
+  "FR",
+  "TR",
   "RU",
   "UA",
   "IL",
-  "FR",
+  "CN",
   "JP",
 ];
 
 async function main() {
   const allWorldCountries = getAllWorldCountries();
   console.log(
-    `[Agora Mundi] ${allWorldCountries.length} gerçek dünya ülkesi hazırlanıyor (0 uydurma veri)...`
+    `[globeTake] Preparing ${allWorldCountries.length} real world countries (0 fabricated data)...`
   );
 
-  // Mevcut sahte / eski kayıtları temizle
+  // Clear existing records cleanly
   await prisma.vote.deleteMany();
   await prisma.follow.deleteMany();
   await prisma.session.deleteMany();
@@ -34,13 +34,12 @@ async function main() {
   await prisma.user.deleteMany();
   await prisma.country.deleteMany();
 
-  // Tüm dünya ülkelerini gerçek coğrafi, dil, başkent ve para birimi bilgileriyle oluştur
+  // Seed all world countries with real geographic, language, capital, and currency metadata in English
   await prisma.country.createMany({
     data: allWorldCountries.map((c) => ({
       code: c.code,
-      nameTr: c.nameTr,
-      nameEn: c.nameEn,
-      officialNameTr: c.officialNameTr,
+      name: c.name,
+      officialName: c.officialName,
       capital: c.capital,
       region: c.region,
       subregion: c.subregion,
@@ -63,10 +62,10 @@ async function main() {
   const skipWarm = process.argv.includes("--offline");
   if (!skipWarm) {
     console.log(
-      `[Agora Mundi] İlk açılış hızı için öne çıkan ${INITIAL_WARM_CODES.length} ülkenin gerçek canlı gündemleri ve ülke künyeleri çekiliyor...`
+      `[globeTake] Warming live English agendas & country profiles for ${INITIAL_WARM_CODES.length} featured countries...`
     );
 
-    // 5'erli paralel gruplarla hızlı ısıtma
+    // Parallel groups of 5 for fast warm-up
     for (let i = 0; i < INITIAL_WARM_CODES.length; i += 5) {
       const batch = INITIAL_WARM_CODES.slice(i, i + 5);
       await Promise.allSettled(
@@ -84,7 +83,7 @@ async function main() {
     where: { isActive: true },
   });
   console.log(
-    `[Agora Mundi] Tamamlandı! ${allWorldCountries.length} ülke ve ${syncedCount} canlı gerçek gündem maddesi hazır (0 sahte kullanıcı, 0 sahte yorum).`
+    `[globeTake] Done! ${allWorldCountries.length} countries and ${syncedCount} live English agendas ready (0 fake users, 0 fake comments).`
   );
 }
 

@@ -111,7 +111,7 @@ async function triggerAtomicRebuild() {
     return;
   }
   building = true;
-  console.log("[auto-prod] Kaynak kod değişikliği algılandı, arka planda derleniyor...");
+  console.log("[auto-prod] Source change detected, rebuilding in background...");
 
   try {
     fs.rmSync(STAGING_DIR, { recursive: true, force: true });
@@ -135,13 +135,13 @@ async function triggerAtomicRebuild() {
       fs.renameSync(STAGING_DIR, LIVE_DIR);
       fs.rmSync(backupDir, { recursive: true, force: true });
       startServer();
-      console.log("[auto-prod] Yeni sürüm kesintisiz yayına alındı!");
+      console.log("[auto-prod] New build deployed seamlessly!");
     } else {
-      console.warn("[auto-prod] Derleme hatası nedeniyle mevcut çalışan sürüm korundu.");
+      console.warn("[auto-prod] Build failed; keeping the currently running release.");
       fs.rmSync(STAGING_DIR, { recursive: true, force: true });
     }
   } catch (err) {
-    console.error("[auto-prod] Yeniden derleme hatası:", err);
+    console.error("[auto-prod] Rebuild error:", err);
   } finally {
     building = false;
     if (pendingRebuild) {

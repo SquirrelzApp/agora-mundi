@@ -1,10 +1,10 @@
 /**
- * Google Çeviri (Google Translate) Servisi
- * AI çeviri yerine doğrudan Google Translate altyapısını kullanır.
+ * Google Translate Service (On-demand user comment translation utility)
+ * Uses Google Translate endpoint directly when a reader requests translation of a foreign-language comment.
  */
 export async function translateWithGoogle(
   text: string,
-  targetLang: string = "tr"
+  targetLang: string = "en"
 ): Promise<{ translatedText: string; detectedSourceLang: string }> {
   try {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(

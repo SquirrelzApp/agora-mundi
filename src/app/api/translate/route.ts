@@ -4,11 +4,11 @@ import { translateWithGoogle } from "@/lib/google-translate";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { text, targetLang = "tr" } = body;
+    const { text, targetLang = "en" } = body;
 
     if (!text || typeof text !== "string") {
       return NextResponse.json(
-        { error: "Çevrilecek metin belirtilmedi." },
+        { error: "Text to translate is required." },
         { status: 400 }
       );
     }
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("POST /api/translate error:", error);
     return NextResponse.json(
-      { error: "Google Çeviri servisine ulaşılamadı." },
+      { error: "Unable to reach Google Translate service." },
       { status: 500 }
     );
   }

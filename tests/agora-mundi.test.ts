@@ -19,22 +19,33 @@ import {
 import { getAllWorldCountries } from "../src/lib/world-countries";
 import { getSchedulerStatusSnapshot } from "../src/lib/news-scheduler";
 
-describe("World Countries Catalog", () => {
-  it("loads ~174 world countries with capitals, currencies, and coordinates", () => {
+describe("World Countries Catalog (English)", () => {
+  it("loads ~174 world countries in English with capitals, currencies, and coordinates", () => {
     const countries = getAllWorldCountries();
-    assert.ok(countries.length >= 170, `Expected >=170 countries, got ${countries.length}`);
+    assert.ok(
+      countries.length >= 170,
+      `Expected >=170 countries, got ${countries.length}`
+    );
 
     const tr = countries.find((c) => c.code === "TR");
     assert.ok(tr, "TR must exist");
+    assert.equal(tr.name, "Turkey");
     assert.equal(tr.capital, "Ankara");
     assert.equal(tr.currencyCode, "TRY");
+    assert.equal(tr.region, "Eurasia & Middle East");
     assert.equal(tr.updateIntervalHours, 1, "HOT countries refresh every 1h");
     assert.ok(tr.areaKm2 && tr.areaKm2 > 700000);
 
     const jp = countries.find((c) => c.code === "JP");
     assert.ok(jp, "JP must exist");
+    assert.equal(jp.name, "Japan");
     assert.equal(jp.currencyCode, "JPY");
-    assert.equal(jp.updateIntervalHours, 3, "MODERATE countries refresh every 3h");
+    assert.equal(jp.region, "Asia-Pacific");
+    assert.equal(
+      jp.updateIntervalHours,
+      3,
+      "MODERATE countries refresh every 3h"
+    );
 
     const sched = getSchedulerStatusSnapshot();
     assert.equal(sched.tickIntervalMinutes, 10);
@@ -45,10 +56,13 @@ describe("World Countries Catalog", () => {
 describe("News Intelligence & Jaccard Topic Clustering", () => {
   it("extracts clean title and publisher from RSS title suffixes", () => {
     const res = cleanHeadlineAndPublisher(
-      "Merkez Bankası faiz kararını açıkladı - Anadolu Ajansı"
+      "Central Bank announces interest rate decision - Reuters"
     );
-    assert.equal(res.cleanTitle, "Merkez Bankası faiz kararını açıkladı");
-    assert.equal(res.publisher, "Anadolu Ajansı");
+    assert.equal(
+      res.cleanTitle,
+      "Central Bank announces interest rate decision"
+    );
+    assert.equal(res.publisher, "Reuters");
   });
 
   it("parses valid RSS XML items and filters trivial gossip/sports noise", () => {
@@ -61,44 +75,48 @@ describe("News Intelligence & Jaccard Topic Clustering", () => {
           <source url="https://www.reuters.com">Reuters</source>
         </item>
         <item>
-          <title>Champions League live match transfer haberleri - SporX</title>
+          <title>Champions League match highlights and transfer rumors - SportTV</title>
           <link>https://example.com/sports</link>
           <pubDate>Sat, 14 Nov 2026 09:05:00 GMT</pubDate>
         </item>
       </channel></rss>
     `;
-    const items = parseRssXmlItems(sampleXml, "en");
+    const items = parseRssXmlItems(sampleXml);
     assert.equal(items.length, 1);
     assert.equal(items[0].publisher, "Reuters");
-    assert.equal(inferAgendaCategory(items[0].title), "EKONOMİ");
+    assert.equal(inferAgendaCategory(items[0].title), "ECONOMY");
   });
 
   it("clusters duplicate coverage of the same event into a single topic and keeps 3 distinct agendas", () => {
     const now = new Date().toISOString();
     const rawItems: VerifiedNewsSource[] = [
       {
-        title: "Parliament approves new national defense budget amid border tensions",
+        title:
+          "Parliament approves new national defense budget amid border tensions",
         publisher: "Reuters",
         url: "https://reuters.com/1",
         publishedAt: now,
         lang: "en",
       },
       {
-        title: "National defense budget approved by Parliament amid rising border tensions",
+        title:
+          "National defense budget approved by Parliament amid rising border tensions",
         publisher: "Bloomberg",
         url: "https://bloomberg.com/1",
         publishedAt: now,
         lang: "en",
       },
       {
-        title: "Central Bank holds interest rates steady as inflation slows in October",
+        title:
+          "Central Bank holds interest rates steady as inflation slows in October",
         publisher: "Financial Times",
         url: "https://ft.com/2",
         publishedAt: now,
         lang: "en",
       },
       {
-        title: "High-speed semiconductor factory opens in southern industrial zone",
+        title:
+          "High-speed semiconductor factory opens in southern industrial zone",
         publisher: "BBC News",
         url: "https://bbc.com/3",
         publishedAt: now,
@@ -107,33 +125,41 @@ describe("News Intelligence & Jaccard Topic Clustering", () => {
     ];
 
     const clusters = clusterNewsIntoDistinctTopics(rawItems);
-    assert.equal(clusters.length, 3, "4 articles with 2 duplicates must produce 3 distinct clusters");
-    assert.equal(clusters[0].sources.length, 2, "Merged cluster must retain both Reuters & Bloomberg sources");
+    assert.equal(
+      clusters.length,
+      3,
+      "4 articles with 2 duplicates must produce 3 distinct clusters"
+    );
+    assert.equal(
+      clusters[0].sources.length,
+      2,
+      "Merged cluster must retain both Reuters & Bloomberg sources"
+    );
   });
 });
 
 describe("Authentication & Moderation Rules", () => {
   it("hashes and verifies passwords securely with scrypt", async () => {
-    const hash = await hashPassword("GucluSifre2026!");
+    const hash = await hashPassword("StrongPass2026!");
     assert.ok(hash.includes(":"));
-    assert.equal(await verifyPassword("GucluSifre2026!", hash), true);
-    assert.equal(await verifyPassword("YanlisSifre", hash), false);
+    assert.equal(await verifyPassword("StrongPass2026!", hash), true);
+    assert.equal(await verifyPassword("WrongPass", hash), false);
   });
 
-  it("normalizes Turkish characters in usernames cleanly", () => {
-    assert.equal(normalizeUsername("Çağrı_Öztürk!"), "cagri_ozturk");
+  it("normalizes usernames cleanly", () => {
+    assert.equal(normalizeUsername("John_Doe!"), "john_doe");
   });
 
   it("allows 10+ character normal comments and blocks <10 chars or media links", () => {
-    const shortRes = validateStructuralRules("Çok kısa");
+    const shortRes = validateStructuralRules("Too short");
     assert.ok(shortRes && !shortRes.approved);
     assert.equal(shortRes.violationCategory, "CHAR_LIMIT");
 
-    const okRes = validateStructuralRules("Çok yerinde bir değerlendirme!");
+    const okRes = validateStructuralRules("That is a very thoughtful analysis!");
     assert.equal(okRes, null);
 
     const mediaRes = validateStructuralRules(
-      "Şu görsele bakın https://site.com/foto.jpg"
+      "Look at this photo https://site.com/photo.jpg"
     );
     assert.ok(mediaRes && !mediaRes.approved);
     assert.equal(mediaRes.violationCategory, "MEDIA_FORBIDDEN");
@@ -141,22 +167,22 @@ describe("Authentication & Moderation Rules", () => {
 
   it("approves conversational nested replies and blocks profanity in moderateComment", async () => {
     const replyRes = await moderateComment(
-      "Türkiye",
-      "Merkez Bankası enflasyon raporu ve para politikası adımları",
-      "Kesinlikle katılıyorum, bu değerlendirme çok yerinde olmuş.",
+      "United States",
+      "Federal Reserve signals cautious path on interest rate cuts",
+      "I completely agree, this is a very reasonable assessment.",
       undefined,
       {
         isReply: true,
-        parentExcerpt: "Enflasyon beklentilerinde önümüzdeki çeyrek kritik olacak.",
+        parentExcerpt: "Inflation expectations in the next quarter will be key.",
       }
     );
     assert.equal(replyRes.approved, true);
     assert.equal(replyRes.violationCategory, "NONE");
 
     const profanityRes = await moderateComment(
-      "Türkiye",
-      "Merkez Bankası enflasyon raporu",
-      "Böyle saçma sapan siktir git karar mı olur"
+      "United States",
+      "Federal Reserve signals cautious path on interest rate cuts",
+      "What a fucking stupid bullshit policy decision this is"
     );
     assert.equal(profanityRes.approved, false);
     assert.equal(profanityRes.violationCategory, "PROFANITY");

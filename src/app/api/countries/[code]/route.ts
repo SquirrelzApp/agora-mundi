@@ -78,7 +78,7 @@ export async function GET(
     });
 
     if (!country) {
-      return NextResponse.json({ error: "Ülke bulunamadı." }, { status: 404 });
+      return NextResponse.json({ error: "Country not found." }, { status: 404 });
     }
 
     if (country.agendas.length === 0) {
@@ -187,7 +187,7 @@ export async function GET(
   } catch (error) {
     console.error("GET /api/countries/[code] error:", error);
     return NextResponse.json(
-      { error: "Ülke detayları alınamadı." },
+      { error: "Failed to load country details." },
       { status: 500 }
     );
   }

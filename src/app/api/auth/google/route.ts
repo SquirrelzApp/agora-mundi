@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Google OAuth henüz yapılandırılmamış (.env içinde GOOGLE_CLIENT_ID tanımlayın).",
+          "Google OAuth is not configured yet (set GOOGLE_CLIENT_ID in .env).",
       },
       { status: 501 }
     );

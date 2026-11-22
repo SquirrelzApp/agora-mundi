@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     if (!identifier || !password) {
       return NextResponse.json(
-        { error: "E-posta / kullanıcı adı ve şifre zorunludur." },
+        { error: "Email / username and password are required." },
         { status: 400 }
       );
     }
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     if (!user || !user.passwordHash) {
       return NextResponse.json(
-        { error: "E-posta/kullanıcı adı veya şifre hatalı." },
+        { error: "Invalid email/username or password." },
         { status: 401 }
       );
     }
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
       return NextResponse.json(
-        { error: "E-posta/kullanıcı adı veya şifre hatalı." },
+        { error: "Invalid email/username or password." },
         { status: 401 }
       );
     }
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("POST /api/auth/login error:", error);
     return NextResponse.json(
-      { error: "Giriş yapılırken bir hata oluştu." },
+      { error: "An error occurred while signing in." },
       { status: 500 }
     );
   }

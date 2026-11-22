@@ -1,10 +1,10 @@
 /**
- * Gerçek Zamanlı Çoklu Kaynak Haber İstihbarat ve Konu Kümeleme Motoru
- * - Google News RSS (Ülke yerel edisyonu + Türkçe basın + Küresel İngilizce basın)
- * - Bing News RSS (Sıfır anahtarlı yedek kaynak)
- * - GNews API (GNEWS_API_KEY tanımlıysa ek doğrulama katmanı)
- * - Jaccard Konu Kümeleme: Aynı olayı anlatan haberleri birleştirip birbirinden tamamen
- *   farklı en önemli 3 gerçek gündemi (A, B, C) kaynak linkleriyle birlikte çıkarır.
+ * Real-Time Multi-Source English News Intelligence & Topic Clustering Engine
+ * - Google News RSS (US English + UK/International English editions)
+ * - Bing News RSS (Zero-key English fallback source)
+ * - GNews API (Optional extra English verification layer when GNEWS_API_KEY is set)
+ * - Jaccard & Containment Topic Clustering: merges duplicate coverage of the same event
+ *   and extracts the top 3 completely distinct real-world agendas (A, B, C) with verified sources.
  */
 
 export interface VerifiedNewsSource {
@@ -12,12 +12,12 @@ export interface VerifiedNewsSource {
   publisher: string;
   url: string;
   publishedAt: string;
-  lang: "tr" | "en" | "other";
+  lang: "en";
 }
 
 export interface NewsTopicCluster {
   primaryTitle: string;
-  primaryLang: "tr" | "en" | "other";
+  primaryLang: "en";
   categoryHint: string;
   publishedAt: string;
   score: number;
@@ -25,55 +25,54 @@ export interface NewsTopicCluster {
 }
 
 // Disambiguate country names that collide with US states, people, or common nouns
-const COUNTRY_QUERY_OVERRIDES: Record<
-  string,
-  { enQuery: string; trQuery?: string; edition?: { hl: string; gl: string; ceid: string } }
-> = {
+const COUNTRY_QUERY_OVERRIDES: Record<string, { enQuery: string }> = {
   TR: {
-    enQuery: '"Turkey" OR "Türkiye" (Ankara OR Erdogan OR economy OR parliament)',
-    trQuery: 'Türkiye (ekonomi OR meclis OR hükümet OR gündem OR bakanlık) -spor -futbol -maç',
-    edition: { hl: "tr", gl: "TR", ceid: "TR:tr" },
+    enQuery:
+      '"Turkey" OR "Türkiye" (Ankara OR Erdogan OR economy OR parliament OR foreign policy) -thanksgiving -recipe -roast',
   },
   US: {
-    enQuery: '"United States" (White House OR Congress OR Senate OR economy OR Supreme Court) -sports',
-    trQuery: 'ABD (Kongre OR Beyaz Saray OR ekonomi OR seçim OR dış politika)',
-    edition: { hl: "en-US", gl: "US", ceid: "US:en" },
+    enQuery:
+      '"United States" (White House OR Congress OR Senate OR economy OR Supreme Court OR foreign policy) -sports -NFL -NBA',
+  },
+  GB: {
+    enQuery:
+      '"United Kingdom" OR "Britain" (Parliament OR Downing Street OR economy OR Starmer OR Bank of England) -Premier League',
   },
   GE: {
-    enQuery: '"Georgia" (Tbilisi OR parliament OR Kobakhidze OR Caucasus) -Atlanta -Bulldogs -NFL',
-    trQuery: 'Gürcistan (Tiflis OR parlamento OR siyaset OR ekonomi)',
+    enQuery:
+      '"Georgia" (Tbilisi OR parliament OR Kobakhidze OR Caucasus OR EU) -Atlanta -Bulldogs -NFL -NCAA',
   },
   JO: {
-    enQuery: '"Jordan" (Amman OR King Abdullah OR Middle East OR government) -NBA -Bulls -sneakers',
-    trQuery: 'Ürdün (Amman OR ekonomi OR siyaset OR Orta Doğu)',
+    enQuery:
+      '"Jordan" (Amman OR King Abdullah OR Middle East OR government OR economy) -NBA -Bulls -sneakers -Michael',
   },
   ML: {
-    enQuery: '"Mali" (Bamako OR Sahel OR junta OR government)',
-    trQuery: 'Mali (Bamako OR Afrika OR yönetim)',
+    enQuery: '"Mali" (Bamako OR Sahel OR junta OR government OR economy)',
   },
   TD: {
-    enQuery: '"Chad" (N\'Djamena OR Deby OR Sahel OR government)',
-    trQuery: 'Çad (Afrika OR hükümet OR ekonomi)',
+    enQuery: '"Chad" (N\'Djamena OR Deby OR Sahel OR government OR oil)',
   },
   NE: {
-    enQuery: '"Niger" (Niamey OR Sahel OR ECOWAS OR uranium)',
-    trQuery: 'Nijer (Niamey OR Afrika OR uranyum)',
+    enQuery: '"Niger" (Niamey OR Sahel OR ECOWAS OR uranium OR junta)',
   },
   XK_NCY: {
     enQuery: '"Northern Cyprus" OR "TRNC" (Nicosia OR Cyprus talks OR economy)',
-    trQuery: '"KKTC" OR "Kuzey Kıbrıs" (Lefkoşa OR meclis OR ekonomi OR Kıbrıs)',
   },
   XK: {
-    enQuery: '"Kosovo" (Pristina OR Kurti OR Balkans OR EU)',
-    trQuery: 'Kosova (Priştine OR Balkanlar OR siyaset)',
+    enQuery: '"Kosovo" (Pristina OR Kurti OR Balkans OR EU OR Serbia)',
   },
   PS: {
-    enQuery: '"Palestine" OR "Gaza" OR "West Bank" (ceasefire OR humanitarian OR diplomacy)',
-    trQuery: 'Filistin OR Gazze (ateşkes OR diplomasi OR Batı Şeria)',
+    enQuery:
+      '"Palestine" OR "Gaza" OR "West Bank" (ceasefire OR humanitarian OR diplomacy)',
   },
   AZ: {
-    enQuery: '"Azerbaijan" (Baku OR Karabakh OR energy OR diplomacy)',
-    trQuery: 'Azerbaycan (Bakü OR enerji OR diplomasi OR ekonomi) -maç',
+    enQuery: '"Azerbaijan" (Baku OR Karabakh OR energy OR diplomacy OR economy)',
+  },
+  OM: {
+    enQuery: '"Oman" (Muscat OR Gulf OR energy OR diplomacy OR economy)',
+  },
+  CY: {
+    enQuery: '"Cyprus" (Nicosia OR EU OR Mediterranean OR energy OR economy)',
   },
 };
 
@@ -97,8 +96,10 @@ const STOPWORDS = new Set([
   "its",
   "are",
   "was",
+  "were",
   "has",
   "have",
+  "had",
   "how",
   "why",
   "what",
@@ -107,29 +108,21 @@ const STOPWORDS = new Set([
   "news",
   "live",
   "updates",
+  "update",
   "report",
   "reports",
-  "bir",
-  "ve",
-  "için",
-  "ile",
-  "olan",
-  "olarak",
-  "sonra",
-  "yeni",
-  "daha",
-  "göre",
-  "karşı",
-  "üzerine",
-  "ilgili",
-  "son",
-  "dakika",
-  "haberi",
-  "haberleri",
+  "breaking",
+  "latest",
+  "today",
+  "year",
+  "years",
+  "could",
+  "would",
+  "should",
 ]);
 
 const TRIVIAL_GOSSIP_SPORTS_REGEX =
-  /\b(horoscope|burç|astroloji|premier league|champions league|şampiyonlar ligi|süper lig|transfer haberleri|maç özeti|canlı izle|ilk 11|celebrity|kardashian|tiktok trend|lottery|piyango sonuçları|hava durumu tahmini)\b/i;
+  /\b(horoscope|astrology|premier league|champions league|la liga|serie a|bundesliga|nba playoffs|nfl draft|super bowl|match highlights|watch live|starting xi|transfer rumors|celebrity|kardashian|tiktok trend|lottery results|weather forecast|box office)\b/i;
 
 export function decodeXmlEntities(raw: string): string {
   return raw
@@ -148,7 +141,7 @@ export function decodeXmlEntities(raw: string): string {
 
 export function cleanHeadlineAndPublisher(
   rawTitle: string,
-  fallbackPublisher = "Uluslararası Basın"
+  fallbackPublisher = "International Press"
 ): { cleanTitle: string; publisher: string } {
   const decoded = decodeXmlEntities(rawTitle).replace(/\s+/g, " ").trim();
   // Google/Bing RSS titles frequently end with " - Publisher Name" or " | Publisher"
@@ -169,10 +162,7 @@ export function cleanHeadlineAndPublisher(
   return { cleanTitle: decoded, publisher: fallbackPublisher };
 }
 
-export function parseRssXmlItems(
-  xml: string,
-  lang: "tr" | "en" | "other"
-): VerifiedNewsSource[] {
+export function parseRssXmlItems(xml: string): VerifiedNewsSource[] {
   const results: VerifiedNewsSource[] = [];
   const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/gi);
 
@@ -190,7 +180,7 @@ export function parseRssXmlItems(
       : undefined;
     const { cleanTitle, publisher } = cleanHeadlineAndPublisher(
       titleMatch[1],
-      explicitSource || (lang === "tr" ? "Haber Kaynağı" : "Global Press")
+      explicitSource || "Global Press"
     );
 
     if (cleanTitle.length < 18) continue;
@@ -212,7 +202,7 @@ export function parseRssXmlItems(
       publisher,
       url,
       publishedAt: publishedIso,
-      lang,
+      lang: "en",
     });
   }
 
@@ -238,48 +228,48 @@ export function extractSignificantTokens(
 export function inferAgendaCategory(text: string): string {
   const lower = text.toLowerCase();
   if (
-    /\b(inflation|economy|economic|gdp|bank|interest rate|tax|budget|trade|tariff|currency|debt|market|energy|oil|gas|enflasyon|ekonomi|merkez bankası|faiz|bütçe|vergi|ticaret|ihracat|kriz|enerji|petrol|doğalgaz|maaş|konut)\b/i.test(
+    /\b(inflation|economy|economic|gdp|bank|interest rate|tax|budget|trade|tariff|currency|debt|market|energy|oil|gas|exports|recession|imf|central bank|housing|wages)\b/i.test(
       lower
     )
   ) {
-    return "EKONOMİ";
+    return "ECONOMY";
   }
   if (
-    /\b(military|war|army|missile|attack|defense|security|border|troops|ceasefire|police|conflict|terror|askeri|savaş|ordu|savunma|güvenlik|sınır|çatışma|ateşkes|operasyon|saldırı)\b/i.test(
+    /\b(military|war|army|missile|attack|defense|defence|security|border|troops|ceasefire|police|conflict|terror|strike|airstrike|insurgent|navy)\b/i.test(
       lower
     )
   ) {
-    return "GÜVENLİK";
+    return "SECURITY";
   }
   if (
-    /\b(summit|diplomacy|treaty|ambassador|foreign minister|nato|un|eu|sanctions|bilateral|alliance|diplomasi|zirve|dışişleri|yaptırım|anlaşma|müzakere|ab|bm)\b/i.test(
+    /\b(summit|diplomacy|diplomatic|treaty|ambassador|foreign minister|nato|un|eu|sanctions|bilateral|alliance|talks|negotiation|accord|embassy)\b/i.test(
       lower
     )
   ) {
-    return "DİPLOMASİ";
+    return "DIPLOMACY";
   }
   if (
-    /\b(ai|artificial intelligence|tech|chip|semiconductor|cyber|space|satellite|digital|yapay zeka|teknoloji|çip|siber|uzay|dijital)\b/i.test(
+    /\b(ai|artificial intelligence|tech|chip|semiconductor|cyber|space|satellite|digital|telecom|quantum|data center|startup)\b/i.test(
       lower
     )
   ) {
-    return "TEKNOLOJİ";
+    return "TECHNOLOGY";
   }
   if (
-    /\b(earthquake|flood|wildfire|climate|volcano|storm|drought|environment|emission|deprem|sel|yangın|iklim|volkan|fırtına|kuraklık|çevre)\b/i.test(
+    /\b(earthquake|flood|wildfire|climate|volcano|storm|drought|environment|emission|hurricane|typhoon|carbon|renewable|glacier)\b/i.test(
       lower
     )
   ) {
-    return "ÇEVRE";
+    return "ENVIRONMENT";
   }
   if (
-    /\b(election|parliament|president|prime minister|coalition|vote|court|law|reform|opposition|protest|government|seçim|meclis|parlamento|hükümet|cumhurbaşkanı|başbakan|koalisyon|yasa|mahkeme|muhalefet|protesto|grev)\b/i.test(
+    /\b(election|parliament|president|prime minister|coalition|vote|voting|court|law|reform|opposition|protest|government|senate|congress|cabinet|minister|constitution)\b/i.test(
       lower
     )
   ) {
-    return "SİYASET";
+    return "POLITICS";
   }
-  return "TOPLUM";
+  return "SOCIETY";
 }
 
 export function clusterNewsIntoDistinctTopics(
@@ -305,7 +295,10 @@ export function clusterNewsIntoDistinctTopics(
       for (const tok of itemTokens) {
         if (cluster.tokens.has(tok)) overlap++;
       }
-      const minSize = Math.max(1, Math.min(itemTokens.length, cluster.tokens.size));
+      const minSize = Math.max(
+        1,
+        Math.min(itemTokens.length, cluster.tokens.size)
+      );
       const unionSize = new Set([...itemTokens, ...cluster.tokens]).size;
       const containment = overlap / minSize;
       const jaccard = overlap / Math.max(1, unionSize);
@@ -320,7 +313,6 @@ export function clusterNewsIntoDistinctTopics(
     }
 
     if (matchedCluster) {
-      // Avoid duplicate URL or identical publisher+title
       const alreadyHasPublisher = matchedCluster.items.some(
         (existing) =>
           existing.url === item.url ||
@@ -344,9 +336,8 @@ export function clusterNewsIntoDistinctTopics(
   const nowMs = Date.now();
 
   const scoredClusters: NewsTopicCluster[] = clusters.map((c) => {
-    // Prefer Turkish headline if cluster contains a high-quality Turkish item, else the first item
     const preferred =
-      c.items.find((i) => i.lang === "tr" && i.title.length >= 25) || c.items[0];
+      c.items.find((i) => i.title.length >= 25) || c.items[0];
 
     const newestMs = Math.max(
       ...c.items.map((i) => new Date(i.publishedAt).getTime() || 0)
@@ -370,7 +361,7 @@ export function clusterNewsIntoDistinctTopics(
 
     return {
       primaryTitle: preferred.title,
-      primaryLang: preferred.lang,
+      primaryLang: "en",
       categoryHint: inferAgendaCategory(
         c.items.map((x) => x.title).join(" ")
       ),
@@ -389,7 +380,8 @@ async function fetchTextFast(url: string, timeoutMs = 4500): Promise<string> {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-      Accept: "application/rss+xml, application/xml, text/xml, application/json, */*",
+      Accept:
+        "application/rss+xml, application/xml, text/xml, application/json, */*",
     },
     cache: "no-store",
     signal: AbortSignal.timeout(timeoutMs),
@@ -402,51 +394,32 @@ async function fetchTextFast(url: string, timeoutMs = 4500): Promise<string> {
 
 export async function fetchCountryLiveNewsClusters(
   countryCode: string,
-  countryNameTr: string,
-  countryNameEn: string
+  countryName: string
 ): Promise<NewsTopicCluster[]> {
   const code = countryCode.toUpperCase();
   const override = COUNTRY_QUERY_OVERRIDES[code];
 
-  const trQuery =
-    override?.trQuery || `"${countryNameTr}" when:14d`;
   const enRecentQuery =
     override?.enQuery ||
-    `"${countryNameEn}" (government OR economy OR parliament OR minister OR president OR policy OR crisis) when:7d`;
-  const enBroadQuery = `"${countryNameEn}" when:30d`;
+    `"${countryName}" (government OR economy OR parliament OR minister OR president OR policy OR crisis) when:7d`;
+  const enBroadQuery = `"${countryName}" when:30d`;
 
-  const urlsToFetch: Array<{ url: string; lang: "tr" | "en" }> = [
-    {
-      url: `https://news.google.com/rss/search?q=${encodeURIComponent(
-        enRecentQuery
-      )}&hl=en-US&gl=US&ceid=US:en`,
-      lang: "en",
-    },
-    {
-      url: `https://news.google.com/rss/search?q=${encodeURIComponent(
-        trQuery
-      )}&hl=tr&gl=TR&ceid=TR:tr`,
-      lang: "tr",
-    },
-    {
-      url: `https://www.bing.com/news/search?q=${encodeURIComponent(
-        countryNameEn
-      )}&format=rss`,
-      lang: "en",
-    },
+  const urlsToFetch: string[] = [
+    `https://news.google.com/rss/search?q=${encodeURIComponent(
+      enRecentQuery
+    )}&hl=en-US&gl=US&ceid=US:en`,
+    `https://news.google.com/rss/search?q=${encodeURIComponent(
+      enRecentQuery
+    )}&hl=en-GB&gl=GB&ceid=GB:en`,
+    `https://www.bing.com/news/search?q=${encodeURIComponent(
+      `${countryName} news`
+    )}&format=rss&setlang=en-US`,
   ];
 
-  if (code === "TR") {
-    urlsToFetch.unshift({
-      url: "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FuQjBHZ0pVVWlnQVAB?hl=tr&gl=TR&ceid=TR:tr",
-      lang: "tr",
-    });
-  }
-
   const settled = await Promise.allSettled(
-    urlsToFetch.map(async (entry) => {
-      const xml = await fetchTextFast(entry.url, 4500);
-      return parseRssXmlItems(xml, entry.lang);
+    urlsToFetch.map(async (url) => {
+      const xml = await fetchTextFast(url, 4500);
+      return parseRssXmlItems(xml);
     })
   );
 
@@ -462,8 +435,8 @@ export async function fetchCountryLiveNewsClusters(
   if (gnewsKey) {
     try {
       const gUrl = `https://gnews.io/api/v4/search?q=${encodeURIComponent(
-        countryNameEn
-      )}&max=6&apikey=${encodeURIComponent(gnewsKey)}`;
+        countryName
+      )}&lang=en&max=6&apikey=${encodeURIComponent(gnewsKey)}`;
       const rawJson = await fetchTextFast(gUrl, 3500);
       const parsed = JSON.parse(rawJson);
       if (Array.isArray(parsed?.articles)) {
@@ -493,16 +466,13 @@ export async function fetchCountryLiveNewsClusters(
         )}&hl=en-US&gl=US&ceid=US:en`,
         4500
       );
-      allItems = [...allItems, ...parseRssXmlItems(broadXml, "en")];
+      allItems = [...allItems, ...parseRssXmlItems(broadXml)];
     } catch {
       // ignore
     }
   }
 
-  const ignoreWords = [
-    ...countryNameEn.split(/\s+/),
-    ...countryNameTr.split(/\s+/),
-  ];
+  const ignoreWords = countryName.split(/\s+/);
 
   return clusterNewsIntoDistinctTopics(allItems, ignoreWords);
 }

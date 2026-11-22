@@ -53,7 +53,7 @@ export async function GET() {
               country: {
                 select: {
                   code: true,
-                  nameTr: true,
+                  name: true,
                   flagEmoji: true,
                 },
               },
@@ -83,7 +83,7 @@ export async function GET() {
   } catch (error) {
     console.error("GET /api/leaderboard error:", error);
     return NextResponse.json(
-      { error: "Liderlik tablosu alınamadı." },
+      { error: "Failed to load leaderboard." },
       { status: 500 }
     );
   }

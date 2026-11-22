@@ -4,7 +4,9 @@ import { ensureCountryIntelligence } from "../src/lib/country-intel";
 
 async function main() {
   const start = Date.now();
-  console.log("[sync-all] Updating refresh tiers (HOT=1h, MODERATE=3h, STABLE=6h)...");
+  console.log(
+    "[sync-all] Updating refresh tiers (HOT=1h, MODERATE=3h, STABLE=6h)..."
+  );
 
   await prisma.country.updateMany({
     where: { tempo: "HOT" },
@@ -26,12 +28,13 @@ async function main() {
     orderBy: { code: "asc" },
   });
 
+  const forceAll = process.argv.includes("--force");
   const needAgendas = allCountries
-    .filter((c) => !c.lastSyncedAt || c._count.agendas < 3)
+    .filter((c) => forceAll || !c.lastSyncedAt || c._count.agendas < 3)
     .map((c) => c.code);
 
   console.log(
-    `[sync-all] Need Gemini 3.5 agenda ingestion for ${needAgendas.length}/${allCountries.length} countries...`
+    `[sync-all] Need English Gemini 3.5 agenda ingestion for ${needAgendas.length}/${allCountries.length} countries...`
   );
 
   // Process 2 batches of 6 in parallel (12 countries concurrently) for fast, safe ingestion
@@ -60,19 +63,22 @@ async function main() {
     Array.from({ length: CONCURRENCY }, (_, idx) => worker(idx + 1))
   );
 
-  // Ensure Country Macro Intelligence (Wikipedia + Wikidata + USD/TRY FX) for all countries
+  // Ensure Country Macro Intelligence (English Wikipedia + Wikidata + USD FX) for all countries
   const needInfo = allCountries
-    .filter((c) => !c.infoSyncedAt || !c.summaryTr)
+    .filter((c) => forceAll || !c.infoSyncedAt || !c.summary)
     .map((c) => c.code);
 
   console.log(
-    `[sync-all] Syncing country intelligence profiles for ${needInfo.length} countries...`
+    `[sync-all] Syncing English country intelligence profiles for ${needInfo.length} countries...`
   );
 
-  const INFO_BATCH = 8;
+  const INFO_BATCH = 3;
   for (let i = 0; i < needInfo.length; i += INFO_BATCH) {
     const slice = needInfo.slice(i, i + INFO_BATCH);
-    await Promise.allSettled(slice.map((code) => ensureCountryIntelligence(code)));
+    await Promise.allSettled(
+      slice.map((code) => ensureCountryIntelligence(code))
+    );
+    await new Promise((r) => setTimeout(r, 250));
   }
 
   const [finalSynced, finalAgendas, finalGemini, finalInfo] = await Promise.all([

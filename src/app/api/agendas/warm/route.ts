@@ -3,7 +3,7 @@ import { syncCountryAgendasToDb } from "@/lib/ai-agenda-curator";
 import { ensureCountryIntelligence } from "@/lib/country-intel";
 
 /**
- * Sabitlenen / öne çıkan ülkelerin gündemlerini arka planda ısıtır
+ * Warms agendas and profiles for featured/pinned countries in the background
  */
 export async function POST(request: NextRequest) {
   try {

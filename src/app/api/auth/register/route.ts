@@ -16,10 +16,10 @@ export async function POST(request: NextRequest) {
     const rawUsername = normalizeUsername(String(body.username || ""));
     const displayName = String(body.displayName || rawUsername).trim();
     const password = String(body.password || "");
-    const countryCode = String(body.countryCode || "TR")
+    const countryCode = String(body.countryCode || "US")
       .trim()
       .toUpperCase();
-    const title = String(body.title || "Küresel Gündem Yorumcusu")
+    const title = String(body.title || "Global Affairs Commentator")
       .trim()
       .slice(0, 60);
     const bio = String(body.bio || "")
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
       return NextResponse.json(
-        { error: "Geçerli bir e-posta adresi girin." },
+        { error: "Please enter a valid email address." },
         { status: 400 }
       );
     }
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Kullanıcı adı en az 3, en fazla 24 karakter olmalı (harf, rakam ve alt çizgi).",
+            "Username must be 3–24 characters (letters, numbers, and underscores only).",
         },
         { status: 400 }
       );
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     if (password.length < 6) {
       return NextResponse.json(
-        { error: "Şifreniz en az 6 karakter olmalıdır." },
+        { error: "Password must be at least 6 characters long." },
         { status: 400 }
       );
     }
@@ -61,8 +61,8 @@ export async function POST(request: NextRequest) {
         {
           error:
             existing.email === rawEmail
-              ? "Bu e-posta adresi zaten kayıtlı."
-              : "Bu kullanıcı adı başka biri tarafından kullanılıyor.",
+              ? "This email address is already registered."
+              : "This username is already taken.",
         },
         { status: 409 }
       );
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
         passwordHash,
         avatarColor,
         countryCode,
-        title: title || "Küresel Gündem Yorumcusu",
+        title: title || "Global Affairs Commentator",
         bio,
       },
     });
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("POST /api/auth/register error:", error);
     return NextResponse.json(
-      { error: "Kayıt işlemi sırasında bir hata oluştu." },
+      { error: "An error occurred during registration." },
       { status: 500 }
     );
   }

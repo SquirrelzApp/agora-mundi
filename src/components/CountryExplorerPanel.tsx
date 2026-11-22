@@ -13,12 +13,12 @@ interface CountryExplorerPanelProps {
 }
 
 const REGIONS = [
-  "ALL",
-  "Avrasya & Orta Doğu",
-  "Avrupa",
-  "Amerika",
-  "Asya-Pasifik",
-  "Afrika",
+  "All",
+  "Eurasia & Middle East",
+  "Europe",
+  "Americas",
+  "Asia-Pacific",
+  "Africa",
 ];
 
 export default function CountryExplorerPanel({
@@ -29,33 +29,32 @@ export default function CountryExplorerPanel({
   onTogglePin,
 }: CountryExplorerPanelProps) {
   const [query, setQuery] = useState("");
-  const [region, setRegion] = useState("ALL");
+  const [region, setRegion] = useState("All");
   const [onlyHot, setOnlyHot] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return countries.filter((c) => {
-      if (region !== "ALL" && c.region !== region) return false;
+      if (region !== "All" && c.region !== region) return false;
       if (onlyHot && c.tempo !== "HOT") return false;
       if (!q) return true;
       return (
-        c.nameTr.toLowerCase().includes(q) ||
+        c.name.toLowerCase().includes(q) ||
         c.code.toLowerCase().includes(q) ||
-        (c.capital && c.capital.toLowerCase().includes(q)) ||
-        (c.nameEn && c.nameEn.toLowerCase().includes(q))
+        (c.capital && c.capital.toLowerCase().includes(q))
       );
     });
   }, [countries, query, region, onlyHot]);
 
   return (
     <aside
-      aria-label="Dünya Ülkeleri Gezgini"
+      aria-label="World Countries Explorer"
       className="bg-white/90 backdrop-blur-xl rounded-3xl p-4 shadow-[0_8px_30px_rgba(15,23,42,0.05)] flex flex-col h-full max-h-[calc(100dvh-6.5rem)]"
     >
       <div className="flex items-center justify-between gap-2 px-1 mb-3">
         <div className="flex items-center gap-2 font-bold text-xs text-ink uppercase tracking-wider">
           <Globe className="w-4 h-4 text-authority" />
-          <span>Ülkeler ({countries.length})</span>
+          <span>Countries ({countries.length})</span>
         </div>
 
         <button
@@ -66,10 +65,10 @@ export default function CountryExplorerPanel({
               ? "bg-rose-600 text-white shadow-xs"
               : "bg-gray-100 text-slate hover:text-ink"
           }`}
-          title="Sıcak gündemli ülkeleri filtrele"
+          title="Filter countries with hot agendas"
         >
           <Flame className="w-3 h-3" />
-          <span>Sıcak Gündem</span>
+          <span>Hot Agendas</span>
         </button>
       </div>
 
@@ -80,7 +79,7 @@ export default function CountryExplorerPanel({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Ülke veya başkent ara..."
+          placeholder="Search country or capital..."
           className="w-full pl-9 pr-3.5 py-2 text-xs bg-gray-100/90 rounded-full focus:outline-none focus:bg-white focus:ring-2 focus:ring-authority/20"
         />
       </div>
@@ -98,7 +97,7 @@ export default function CountryExplorerPanel({
                 : "bg-gray-100 text-slate hover:text-ink"
             }`}
           >
-            {reg === "ALL" ? "Tümü" : reg}
+            {reg}
           </button>
         ))}
       </div>
@@ -132,7 +131,7 @@ export default function CountryExplorerPanel({
                         isSelected ? "text-white" : "text-ink"
                       }`}
                     >
-                      {c.nameTr}
+                      {c.name}
                     </span>
                     {c.tempo === "HOT" && (
                       <span
@@ -168,7 +167,7 @@ export default function CountryExplorerPanel({
                 type="button"
                 onClick={() => onTogglePin(c.code)}
                 title={
-                  isPinned ? "Hızlı bardan kaldır" : "Hızlı bara sabitle"
+                  isPinned ? "Unpin from quick bar" : "Pin to quick bar"
                 }
                 className={`p-1.5 rounded-full shrink-0 transition ${
                   isPinned
@@ -191,7 +190,7 @@ export default function CountryExplorerPanel({
 
         {filtered.length === 0 && (
           <div className="p-6 text-center text-xs text-slate">
-            Aramanızla eşleşen ülke bulunamadı.
+            No countries matched your search.
           </div>
         )}
       </div>

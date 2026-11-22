@@ -11,7 +11,7 @@ export async function POST(
     if (!currentUser) {
       return NextResponse.json(
         {
-          error: "Beğeni yapmak için giriş yapmalısınız.",
+          error: "Please sign in to like comments.",
           requiresAuth: true,
         },
         { status: 401 }
@@ -25,7 +25,7 @@ export async function POST(
 
     if (!comment) {
       return NextResponse.json(
-        { error: "Yorum bulunamadı." },
+        { error: "Comment not found." },
         { status: 404 }
       );
     }
@@ -92,7 +92,7 @@ export async function POST(
   } catch (error) {
     console.error("POST /api/comments/[id]/vote error:", error);
     return NextResponse.json(
-      { error: "Beğeni işlemi başarısız oldu." },
+      { error: "Failed to toggle like." },
       { status: 500 }
     );
   }

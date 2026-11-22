@@ -22,7 +22,7 @@ export async function GET() {
           country: {
             select: {
               code: true,
-              nameTr: true,
+              name: true,
               flagEmoji: true,
               region: true,
               tempo: true,
@@ -52,7 +52,7 @@ export async function GET() {
               country: {
                 select: {
                   code: true,
-                  nameTr: true,
+                  name: true,
                   flagEmoji: true,
                 },
               },
@@ -109,7 +109,7 @@ export async function GET() {
   } catch (error) {
     console.error("GET /api/feed error:", error);
     return NextResponse.json(
-      { error: "Küresel akış yüklenemedi." },
+      { error: "Failed to load global feed." },
       { status: 500 }
     );
   }

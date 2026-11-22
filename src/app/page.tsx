@@ -25,17 +25,17 @@ import {
 } from "lucide-react";
 
 const DEFAULT_PINNED_CODES = [
-  "TR",
-  "AZ",
   "US",
-  "DE",
   "GB",
-  "RU",
-  "UA",
-  "IL",
+  "DE",
   "FR",
-  "JP",
+  "TR",
+  "UA",
+  "RU",
+  "IL",
   "CN",
+  "JP",
+  "IN",
   "BR",
 ];
 
@@ -56,7 +56,7 @@ export default function AgoraMundiPage() {
 
   const [commentSort, setCommentSort] = useState<"likes" | "recent">("likes");
   const [preferredTranslateLang, setPreferredTranslateLang] =
-    useState<string>("tr");
+    useState<string>("en");
   const countryCacheRef = useRef<Map<string, CountryDetail>>(new Map());
 
   // Auth & Modals
@@ -255,7 +255,7 @@ export default function AgoraMundiPage() {
 
   const handleFollowUser = async (username: string) => {
     if (!currentUser) {
-      handleOpenAuth("Kullanıcıları takip etmek için giriş yapın.");
+      handleOpenAuth("Sign in to follow users.");
       return;
     }
 
@@ -263,7 +263,7 @@ export default function AgoraMundiPage() {
       method: "POST",
     });
     if (res.status === 401) {
-      handleOpenAuth("Kullanıcıları takip etmek için giriş yapın.");
+      handleOpenAuth("Sign in to follow users.");
       return;
     }
     if (res.ok) {
@@ -282,7 +282,7 @@ export default function AgoraMundiPage() {
 
   const handleVoteComment = async (commentId: string) => {
     if (!currentUser) {
-      handleOpenAuth("Yorumları beğenmek için giriş yapın veya kayıt olun.");
+      handleOpenAuth("Sign in or create an account to like comments.");
       return;
     }
 
@@ -290,7 +290,7 @@ export default function AgoraMundiPage() {
       method: "POST",
     });
     if (res.status === 401) {
-      handleOpenAuth("Yorumları beğenmek için giriş yapın.");
+      handleOpenAuth("Sign in to like comments.");
       return;
     }
     if (res.ok && selectedCode) {
@@ -333,7 +333,7 @@ export default function AgoraMundiPage() {
 
             <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-800 text-[11px] font-semibold">
               <Sparkles className="w-3 h-3" />
-              <span>174 Ülke • Canlı 3 Gündem</span>
+              <span>174 Countries • 3 Live Agendas</span>
             </span>
           </div>
 
@@ -365,7 +365,7 @@ export default function AgoraMundiPage() {
                   }}
                   className="px-3.5 py-1.5 rounded-full bg-authority text-white text-xs font-semibold shadow-xs hover:opacity-95 transition"
                 >
-                  Hesabım
+                  My Account
                 </button>
               </div>
             ) : (
@@ -379,7 +379,7 @@ export default function AgoraMundiPage() {
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-200/75 hover:bg-gray-200 text-xs font-semibold text-ink transition"
                 >
                   <LogIn className="w-3.5 h-3.5" />
-                  <span>Giriş</span>
+                  <span>Sign In</span>
                 </button>
 
                 <button
@@ -391,7 +391,7 @@ export default function AgoraMundiPage() {
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-authority text-white text-xs font-semibold shadow-sm hover:opacity-95 transition"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
-                  <span>Kayıt Ol</span>
+                  <span>Sign Up</span>
                 </button>
               </div>
             )}
@@ -492,7 +492,7 @@ export default function AgoraMundiPage() {
           MOBILE COLLAPSIBLE BOTTOM TAB BAR (< lg)
          ==================================================================== */}
       <nav
-        aria-label="Mobil Gezinme Sekmeleri"
+        aria-label="Mobile Navigation Tabs"
         className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-xl border-t border-gray-200/80 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] px-2 py-1.5"
       >
         <div className="grid grid-cols-4 gap-1 max-w-md mx-auto">
@@ -506,7 +506,7 @@ export default function AgoraMundiPage() {
             }`}
           >
             <Globe className="w-4 h-4" />
-            <span>{selectedCode ? `${selectedCode} Gündem` : "Küre"}</span>
+            <span>{selectedCode ? `${selectedCode} Agenda` : "Globe"}</span>
           </button>
 
           <button
@@ -519,7 +519,7 @@ export default function AgoraMundiPage() {
             }`}
           >
             <MapPin className="w-4 h-4" />
-            <span>Ülkeler</span>
+            <span>Countries</span>
           </button>
 
           <button
@@ -532,7 +532,7 @@ export default function AgoraMundiPage() {
             }`}
           >
             <Zap className="w-4 h-4" />
-            <span>Canlı Akış</span>
+            <span>Live Pulse</span>
           </button>
 
           <button
@@ -545,7 +545,7 @@ export default function AgoraMundiPage() {
             }`}
           >
             <Trophy className="w-4 h-4" />
-            <span>Sıralama</span>
+            <span>Rankings</span>
           </button>
         </div>
       </nav>

@@ -36,7 +36,7 @@ export interface TopThesisItem {
     countryCode: string;
     country: {
       code: string;
-      nameTr: string;
+      name: string;
       flagEmoji: string;
     };
   };
@@ -51,7 +51,7 @@ export interface GlobalFeedItem {
   publishedAt: string;
   country: {
     code: string;
-    nameTr: string;
+    name: string;
     flagEmoji: string;
     region: string;
     tempo: string;
@@ -75,7 +75,7 @@ export interface GlobalCommentFeedItem {
     title: string;
     country: {
       code: string;
-      nameTr: string;
+      name: string;
       flagEmoji: string;
     };
   };
@@ -124,9 +124,9 @@ export default function LeaderboardSidebar({
   return (
     <aside
       className="bg-white/90 backdrop-blur-xl rounded-3xl p-4 shadow-[0_8px_30px_rgba(15,23,42,0.05)] flex flex-col gap-4 max-h-[calc(100dvh-6.5rem)] overflow-y-auto"
-      aria-label="Canlı Küresel Akış ve Sıralama"
+      aria-label="Live Global Pulse and Rankings"
     >
-      {/* Top Mode Switcher: Canlı Akış vs Topluluk Sıralaması */}
+      {/* Top Mode Switcher: Live Pulse vs Community Rankings */}
       <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-2xl text-xs font-semibold shrink-0">
         <button
           type="button"
@@ -138,7 +138,7 @@ export default function LeaderboardSidebar({
           }`}
         >
           <Zap className="w-3.5 h-3.5" />
-          <span>Canlı Gündem</span>
+          <span>Live Pulse</span>
         </button>
 
         <button
@@ -151,7 +151,7 @@ export default function LeaderboardSidebar({
           }`}
         >
           <Trophy className="w-3.5 h-3.5" />
-          <span>Sıralama</span>
+          <span>Rankings</span>
         </button>
       </div>
 
@@ -163,16 +163,16 @@ export default function LeaderboardSidebar({
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-bold uppercase tracking-wider text-ink">
-                🌍 Dünyada Konuşulanlar
+                🌍 Trending Worldwide
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-800 font-semibold">
-                CANLI
+                LIVE
               </span>
             </div>
 
             {globalAgendas.length === 0 ? (
               <div className="p-4 bg-gray-50 rounded-2xl text-xs text-slate text-center">
-                Canlı ülke gündemleri yükleniyor...
+                Loading live country agendas...
               </div>
             ) : (
               <div className="space-y-2">
@@ -187,7 +187,7 @@ export default function LeaderboardSidebar({
                   >
                     <div className="flex items-center justify-between gap-2 text-[11px]">
                       <span className="font-bold text-authority truncate">
-                        {item.country.flagEmoji} {item.country.nameTr} •{" "}
+                        {item.country.flagEmoji} {item.country.name} •{" "}
                         {item.slot}
                       </span>
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white text-slate shrink-0">
@@ -208,7 +208,7 @@ export default function LeaderboardSidebar({
             <div className="space-y-2 pt-2 border-t border-gray-100">
               <div className="flex items-center gap-1.5 px-1 text-xs font-bold uppercase tracking-wider text-ink">
                 <MessageSquare className="w-3.5 h-3.5 text-authority" />
-                <span>Son Kullanıcı Yorumları</span>
+                <span>Recent Community Takes</span>
               </div>
 
               <div className="space-y-2">
@@ -229,7 +229,7 @@ export default function LeaderboardSidebar({
                         className="font-semibold text-authority hover:underline truncate"
                       >
                         {rc.agendaItem.country.flagEmoji}{" "}
-                        {rc.agendaItem.country.nameTr} [{rc.agendaItem.slot}]
+                        {rc.agendaItem.country.name} [{rc.agendaItem.slot}]
                       </button>
                       <button
                         type="button"
@@ -267,7 +267,7 @@ export default function LeaderboardSidebar({
                 }`}
               >
                 <Flame className="w-3 h-3" />
-                <span>Haftalık</span>
+                <span>Weekly</span>
               </button>
               <button
                 type="button"
@@ -279,7 +279,7 @@ export default function LeaderboardSidebar({
                 }`}
               >
                 <Users className="w-3 h-3" />
-                <span>Takipçi</span>
+                <span>Followers</span>
               </button>
               <button
                 type="button"
@@ -291,18 +291,18 @@ export default function LeaderboardSidebar({
                 }`}
               >
                 <Globe2 className="w-3 h-3" />
-                <span>Etki</span>
+                <span>Reach</span>
               </button>
             </div>
 
             {activeList.length === 0 ? (
               <div className="p-5 bg-gray-50 rounded-2xl text-center space-y-1">
                 <div className="text-xs font-bold text-ink">
-                  Liderlik Tablosu Gerçek Üyeleri Bekliyor
+                  Leaderboard Awaits Real Voices
                 </div>
                 <p className="text-[11px] text-slate leading-relaxed">
-                  Tüm sahte profiller temizlendi. Ülke gündemlerine yorum
-                  yaparak zirveye yerleşen ilk gerçek üye olun!
+                  All placeholder profiles have been cleared. Comment on any
+                  country agenda to become the first member at the top!
                 </p>
               </div>
             ) : (
@@ -343,7 +343,8 @@ export default function LeaderboardSidebar({
                         ▲ {user.weeklyLikes}
                       </div>
                       <div className="text-[10px] text-slate">
-                        {user.globalReachCount} ülke
+                        {user.globalReachCount}{" "}
+                        {user.globalReachCount === 1 ? "country" : "countries"}
                       </div>
                     </div>
                   </button>
@@ -356,7 +357,7 @@ export default function LeaderboardSidebar({
           {data && data.topTheses.length > 0 && (
             <div className="space-y-2 pt-2 border-t border-gray-100">
               <div className="px-1 text-xs font-bold uppercase tracking-wider text-ink">
-                🔥 En Çok Beğenilen Yorumlar
+                🔥 Top Liked Takes
               </div>
               {data.topTheses.map((thesis) => (
                 <div
@@ -375,7 +376,7 @@ export default function LeaderboardSidebar({
                       className="font-semibold text-authority hover:underline truncate"
                     >
                       {thesis.agendaItem.country.flagEmoji}{" "}
-                      {thesis.agendaItem.country.nameTr} •{" "}
+                      {thesis.agendaItem.country.name} •{" "}
                       {thesis.agendaItem.slot}
                     </button>
                     <span className="font-mono font-bold text-ink">
@@ -396,10 +397,10 @@ export default function LeaderboardSidebar({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 font-bold text-ink">
                   <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                  <span>Gemini 3.5 Moderasyon</span>
+                  <span>Gemini 3.5 Moderation</span>
                 </div>
                 <span className="text-[10px] font-mono px-2 py-0.5 bg-emerald-500/10 text-emerald-800 rounded-full font-semibold">
-                  AKTİF
+                  ACTIVE
                 </span>
               </div>
 
@@ -408,13 +409,13 @@ export default function LeaderboardSidebar({
                   <div className="font-mono font-bold text-sm text-emerald-700">
                     {data.moderationStats.totalApprovedComments}
                   </div>
-                  <div className="text-[10px] text-slate">Yayınlanan Yorum</div>
+                  <div className="text-[10px] text-slate">Published Takes</div>
                 </div>
                 <div className="p-2.5 bg-white rounded-xl">
                   <div className="font-mono font-bold text-sm text-rose-700">
                     {data.moderationStats.totalRejectedComments}
                   </div>
-                  <div className="text-[10px] text-slate">Engellenen</div>
+                  <div className="text-[10px] text-slate">Blocked</div>
                 </div>
               </div>
             </div>

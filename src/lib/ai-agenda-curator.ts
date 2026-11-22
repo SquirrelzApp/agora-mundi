@@ -1,6 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from "@/lib/prisma";
-import { translateWithGoogle } from "@/lib/google-translate";
 import {
   fetchCountryLiveNewsClusters,
   extractSignificantTokens,
@@ -27,7 +26,17 @@ export interface CuratedAgendaSlot {
 
 const SLOTS: Array<"A" | "B" | "C"> = ["A", "B", "C"];
 
-function polishTurkishTitle(raw: string): string {
+const AGENDA_CATEGORIES = [
+  "POLITICS",
+  "ECONOMY",
+  "SECURITY",
+  "DIPLOMACY",
+  "SOCIETY",
+  "TECHNOLOGY",
+  "ENVIRONMENT",
+] as const;
+
+function polishHeadline(raw: string): string {
   const cleaned = raw
     .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
     .replace(/\s+/g, " ")
@@ -37,18 +46,16 @@ function polishTurkishTitle(raw: string): string {
 }
 
 /**
- * Gerçek Haber Kümeleri + Gemini 3.5 Flash-Lite (varsa) / Sıfır Anahtarlı Canlı Çeviri Motoru
- * Hiçbir uydurma / sabit (hardcoded) şablon içermez; tamamı canlı haber kaynaklarına dayanır.
+ * Live English News Clusters + Gemini 3.5 Flash-Lite (if configured) / Zero-Key Live RSS Curator.
+ * Zero fabricated/hardcoded templates; 100% grounded in live English news sources (never translated to Turkish).
  */
 export async function curateLiveCountryAgendas(
   countryCode: string,
-  countryNameTr: string,
-  countryNameEn: string
+  countryName: string
 ): Promise<CuratedAgendaSlot[]> {
   const clusters: NewsTopicCluster[] = await fetchCountryLiveNewsClusters(
     countryCode,
-    countryNameTr,
-    countryNameEn
+    countryName
   );
 
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
@@ -61,7 +68,7 @@ export async function curateLiveCountryAgendas(
       const clusterDigest = topClusters
         .map(
           (c, idx) =>
-            `[${idx}] (${c.categoryHint}) "${c.primaryTitle}" — Kaynaklar: ${c.sources
+            `[${idx}] (${c.categoryHint}) "${c.primaryTitle}" — Sources: ${c.sources
               .map((s) => `${s.publisher} (${s.publishedAt.slice(0, 10)})`)
               .join(", ")}`
         )
@@ -78,17 +85,17 @@ export async function curateLiveCountryAgendas(
           thinking_level: "low",
         },
         ...(useSearchTool ? { tools: [{ type: "google_search" }] } : {}),
-        system_instruction: `Sen küresel gündem platformu globeTake'in baş editörüsün.
-Görevin: Verilen gerçek ve güncel haber kümelerinden yola çıkarak ülkenin şu an en çok konuşulan, birbirinden TAMAMEN FARKLI 3 gerçek gündemini (A, B, C) Türkçe olarak özetlemek.
-Kurallar:
-1. ASLA uydurma bilgi ekleme; verilen gerçek haberlere sadık kal.
-2. Her "title" tek cümlelik, tıklama tuzağından uzak, net ve akıcı Türkçe olsun (40-120 karakter).
-3. Her "summary" olayın arka planını anlatan 1-2 cümlelik tarafsız bilgi notu olsun.
-4. "category" yalnızca şunlardan biri olabilir: SİYASET, EKONOMİ, GÜVENLİK, DİPLOMASİ, TOPLUM, TEKNOLOJİ, ÇEVRE.
-5. "clusterIndex" ilgili haber kümesinin numarasını (0-${Math.max(0, topClusters.length - 1)}) göstersin.`,
-        input: `Ülke: ${countryNameTr} (${countryNameEn} / ${countryCode})\nGüncel Haber Kümeleri:\n${
+        system_instruction: `You are the chief editor of globeTake, a global civic discourse platform.
+Your task: Based strictly on the provided live news clusters, produce the 3 most important, COMPLETELY DISTINCT current agendas (A, B, C) for this country in crisp, neutral English.
+Rules:
+1. NEVER fabricate facts; stay strictly faithful to the provided live news clusters.
+2. Each "title" must be a single-sentence, clickbait-free, crisp, neutral English headline (40-120 characters).
+3. Each "summary" must be a 1-2 sentence neutral background brief explaining the context.
+4. "category" must be strictly one of: POLITICS, ECONOMY, SECURITY, DIPLOMACY, SOCIETY, TECHNOLOGY, ENVIRONMENT.
+5. "clusterIndex" must reference the matching news cluster index (0-${Math.max(0, topClusters.length - 1)}).`,
+        input: `Country: ${countryName} (${countryCode})\nLive News Clusters:\n${
           clusterDigest ||
-          "Haber kümesi az; Google Search ile bu ülkenin bugünkü en önemli 3 gerçek gündemini bul."
+          "Very few clusters available; use Google Search to identify today's 3 most important real-world stories for this country in English."
         }`,
         response_format: {
           type: "text",
@@ -107,15 +114,7 @@ Kurallar:
                     summary: { type: "string" },
                     category: {
                       type: "string",
-                      enum: [
-                        "SİYASET",
-                        "EKONOMİ",
-                        "GÜVENLİK",
-                        "DİPLOMASİ",
-                        "TOPLUM",
-                        "TEKNOLOJİ",
-                        "ÇEVRE",
-                      ],
+                      enum: [...AGENDA_CATEGORIES],
                     },
                     clusterIndex: { type: "integer" },
                   },
@@ -153,9 +152,9 @@ Kurallar:
 
             return {
               slot: SLOTS[idx],
-              title: polishTurkishTitle(item.title),
+              title: polishHeadline(item.title),
               summary: item.summary.trim(),
-              category: item.category || "GÜNDEM",
+              category: item.category || "WORLD",
               publishedAt:
                 matchedCluster?.publishedAt || new Date().toISOString(),
               sourceOrigin: "GEMINI_GROUNDED",
@@ -172,53 +171,38 @@ Kurallar:
     }
   }
 
-  // 2. Zero-Key Real-Time RSS + Parallel Translation Curator
+  // 2. Zero-Key Real-Time English RSS Curator (no translation needed)
   const selectedClusters = clusters.slice(0, 3);
 
-  const curated = await Promise.all(
-    selectedClusters.map(async (cluster, idx): Promise<CuratedAgendaSlot> => {
-      let trTitle = cluster.primaryTitle;
-      if (cluster.primaryLang !== "tr") {
-        const trRes = await translateWithGoogle(cluster.primaryTitle, "tr");
-        trTitle = trRes.translatedText || cluster.primaryTitle;
-      }
-      trTitle = polishTurkishTitle(trTitle);
+  return selectedClusters.map((cluster, idx): CuratedAgendaSlot => {
+    const cleanTitle = polishHeadline(cluster.primaryTitle);
+    const pubNames = cluster.sources.map((s) => s.publisher).join(", ");
+    let summary = "";
 
-      // Build informative context summary from corroborating real sources
-      const pubNames = cluster.sources.map((s) => s.publisher).join(", ");
-      let summary = "";
-      if (cluster.sources.length > 1) {
-        const secondSource: VerifiedNewsSource = cluster.sources[1];
-        let secondAngle = secondSource.title;
-        if (secondSource.lang !== "tr") {
-          const secTr = await translateWithGoogle(secondSource.title, "tr");
-          secondAngle = secTr.translatedText || secondSource.title;
-        }
-        summary = `${pubNames} kaynaklarında öne çıkan gelişme. İlgili haberlerde "${polishTurkishTitle(
-          secondAngle
-        )}" başlığıyla da tartışılıyor.`;
-      } else if (cluster.sources[0]) {
-        summary = `${cluster.sources[0].publisher} tarafından aktarılan güncel gelişme kamuoyunda yakından takip ediliyor.`;
-      }
+    if (cluster.sources.length > 1) {
+      const secondSource: VerifiedNewsSource = cluster.sources[1];
+      summary = `Reported across ${pubNames}. Related coverage also highlights "${polishHeadline(
+        secondSource.title
+      )}".`;
+    } else if (cluster.sources[0]) {
+      summary = `Developing story reported by ${cluster.sources[0].publisher} attracting public attention in ${countryName}.`;
+    }
 
-      return {
-        slot: SLOTS[idx],
-        title: trTitle,
-        summary,
-        category: cluster.categoryHint || inferAgendaCategory(trTitle),
-        publishedAt: cluster.publishedAt,
-        sourceOrigin: "LIVE_RSS_CURATED",
-        sources: cluster.sources.map((s) => ({
-          title: s.title,
-          publisher: s.publisher,
-          url: s.url,
-          publishedAt: s.publishedAt,
-        })),
-      };
-    })
-  );
-
-  return curated;
+    return {
+      slot: SLOTS[idx],
+      title: cleanTitle,
+      summary,
+      category: cluster.categoryHint || inferAgendaCategory(cleanTitle),
+      publishedAt: cluster.publishedAt,
+      sourceOrigin: "LIVE_RSS_CURATED",
+      sources: cluster.sources.map((s) => ({
+        title: s.title,
+        publisher: s.publisher,
+        url: s.url,
+        publishedAt: s.publishedAt,
+      })),
+    };
+  });
 }
 
 // Deduplicate concurrent sync calls for the same country
@@ -354,13 +338,9 @@ export async function syncCountryAgendasToDb(
       }
 
       const meta = getWorldCountryMetaByCode(code);
-      const nameEn = country.nameEn || meta?.nameEn || country.nameTr;
+      const name = country.name || meta?.name || code;
 
-      const curatedSlots = await curateLiveCountryAgendas(
-        code,
-        country.nameTr,
-        nameEn
-      );
+      const curatedSlots = await curateLiveCountryAgendas(code, name);
 
       return await persistCuratedSlotsForCountry(
         code,
@@ -380,10 +360,10 @@ export async function syncCountryAgendasToDb(
 }
 
 /**
- * Arka Plan Toplu (Batch) Haber Çekme + Gemini 3.5 Formatlama Motoru:
- * Ham RSS haber kümeleri ulaştığı anda toplu olarak tek bir Gemini 3.5 çağrısıyla
- * Türkçe'ye ve 3 farklı gündem formatına (A, B, C) dönüştürülüp doğrudan veritabanına yazılır.
- * Böylece web sitesinde kullanıcı tıklaması sırasında ASLA Gemini beklenmez.
+ * Background Batch News Fetching + Gemini 3.5 Curation Engine:
+ * Live English RSS clusters are curated in a single batched Gemini 3.5 call into
+ * 3 distinct English agendas (A, B, C) and written directly to PostgreSQL so
+ * user clicks on the site NEVER wait on Gemini.
  */
 export async function syncBatchCountriesToDb(
   countryCodes: string[],
@@ -429,17 +409,13 @@ export async function syncBatchCountriesToDb(
       return 0;
     }
 
-    // 1. Fetch live RSS clusters in parallel for all countries in this batch
+    // 1. Fetch live English RSS clusters in parallel for all countries in this batch
     const rawClusterResults = await Promise.all(
       eligible.map(async (country) => {
         const meta = getWorldCountryMetaByCode(country.code);
-        const nameEn = country.nameEn || meta?.nameEn || country.nameTr;
-        const clusters = await fetchCountryLiveNewsClusters(
-          country.code,
-          country.nameTr,
-          nameEn
-        );
-        return { country, nameEn, clusters };
+        const name = country.name || meta?.name || country.code;
+        const clusters = await fetchCountryLiveNewsClusters(country.code, name);
+        return { country, name, clusters };
       })
     );
 
@@ -447,7 +423,11 @@ export async function syncBatchCountriesToDb(
     // bump lastSyncedAt and skip calling Gemini completely (0 tokens spent!).
     const clusterResults: typeof rawClusterResults = [];
     for (const item of rawClusterResults) {
-      if (!force && item.country.agendas.length === 3 && item.clusters.length >= 3) {
+      if (
+        !force &&
+        item.country.agendas.length === 3 &&
+        item.clusters.length >= 3
+      ) {
         const existingUrls = new Set<string>();
         const existingRawTitles: string[] = [];
         for (const ag of item.country.agendas) {
@@ -504,7 +484,7 @@ export async function syncBatchCountriesToDb(
           process.env.GEMINI_NEWS_MODEL || "gemini-3.5-flash-lite";
 
         const batchPrompt = richEntries
-          .map(({ country, nameEn, clusters }) => {
+          .map(({ country, name, clusters }) => {
             const top = clusters.slice(0, 7);
             const lines = top
               .map(
@@ -515,7 +495,7 @@ export async function syncBatchCountriesToDb(
                     .join(", ")}`
               )
               .join("\n");
-            return `=== ÜLKE: ${country.code} | ${country.nameTr} (${nameEn}) ===\n${lines}`;
+            return `=== COUNTRY: ${country.code} | ${name} ===\n${lines}`;
           })
           .join("\n\n");
 
@@ -524,14 +504,14 @@ export async function syncBatchCountriesToDb(
           generation_config: {
             thinking_level: "low",
           },
-          system_instruction: `Sen küresel gündem platformu globeTake'in baş editörüsün.
-Verilen her ülke için, o ülkenin haber kümelerinden yola çıkarak birbirinden FARKLI en önemli 3 gerçek gündemini (items: tam 3 eleman) Türkçe olarak hazırla.
-Kurallar:
-1. ASLA uydurma bilgi ekleme; verilen gerçek haber kümelerine sadık kal.
-2. Her "title" tek cümlelik, akıcı ve tarafsız Türkçe olsun (40-120 karakter).
-3. Her "summary" 1-2 cümlelik bilgilendirici arka plan özeti olsun.
-4. "category": SİYASET, EKONOMİ, GÜVENLİK, DİPLOMASİ, TOPLUM, TEKNOLOJİ veya ÇEVRE.
-5. "clusterIndex": ilgili ülkedeki haber kümesi numarası (0-6).`,
+          system_instruction: `You are the chief editor of globeTake, a global civic discourse platform.
+For each country provided, use its live news clusters to prepare the 3 most important, COMPLETELY DISTINCT real-world agendas (items: exactly 3 elements) in crisp, neutral English.
+Rules:
+1. NEVER fabricate facts; stay strictly faithful to the provided live news clusters.
+2. Each "title" must be a single-sentence, clickbait-free, neutral English headline (40-120 characters).
+3. Each "summary" must be a 1-2 sentence neutral background brief.
+4. "category": POLITICS, ECONOMY, SECURITY, DIPLOMACY, SOCIETY, TECHNOLOGY, or ENVIRONMENT.
+5. "clusterIndex": matching cluster index (0-6) for that country.`,
           input: batchPrompt,
           response_format: {
             type: "text",
@@ -556,15 +536,7 @@ Kurallar:
                             summary: { type: "string" },
                             category: {
                               type: "string",
-                              enum: [
-                                "SİYASET",
-                                "EKONOMİ",
-                                "GÜVENLİK",
-                                "DİPLOMASİ",
-                                "TOPLUM",
-                                "TEKNOLOJİ",
-                                "ÇEVRE",
-                              ],
+                              enum: [...AGENDA_CATEGORIES],
                             },
                             clusterIndex: { type: "integer" },
                           },
@@ -604,16 +576,20 @@ Kurallar:
               const found = parsed.countries.find(
                 (c) => c.code?.toUpperCase() === entry.country.code
               );
-              if (found && Array.isArray(found.items) && found.items.length === 3) {
+              if (
+                found &&
+                Array.isArray(found.items) &&
+                found.items.length === 3
+              ) {
                 const top = entry.clusters.slice(0, 7);
                 const slots: CuratedAgendaSlot[] = found.items.map(
                   (item, idx) => {
                     const matched = top[item.clusterIndex] || top[idx];
                     return {
                       slot: SLOTS[idx],
-                      title: polishTurkishTitle(item.title),
+                      title: polishHeadline(item.title),
                       summary: item.summary.trim(),
-                      category: item.category || "GÜNDEM",
+                      category: item.category || "WORLD",
                       publishedAt:
                         matched?.publishedAt || new Date().toISOString(),
                       sourceOrigin: "GEMINI_GROUNDED",
@@ -647,7 +623,7 @@ Kurallar:
       }
     }
 
-    // 3. Fallback for sparse-RSS countries (uses Gemini + Google Search tool) or any missed entry
+    // 3. Fallback for sparse-RSS countries or any entry missed in the batch call
     const remaining = [
       ...sparseEntries,
       ...richEntries.filter((e) => !handledCodes.has(e.country.code)),
@@ -656,8 +632,7 @@ Kurallar:
     for (const entry of remaining) {
       const slots = await curateLiveCountryAgendas(
         entry.country.code,
-        entry.country.nameTr,
-        entry.nameEn
+        entry.name
       );
       const ok = await persistCuratedSlotsForCountry(
         entry.country.code,

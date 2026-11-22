@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     const profile = await userRes.json();
     const googleId = String(profile.id || "");
     const email = String(profile.email || "").toLowerCase();
-    const name = String(profile.name || email.split("@")[0] || "Kullanıcı");
+    const name = String(profile.name || email.split("@")[0] || "Member");
 
     if (!googleId || !email) {
       return NextResponse.redirect(`${origin}/?authError=google_email`);
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     if (!user) {
       let baseUsername = normalizeUsername(email.split("@")[0]);
-      if (baseUsername.length < 3) baseUsername = `uye_${googleId.slice(-5)}`;
+      if (baseUsername.length < 3) baseUsername = `member_${googleId.slice(-5)}`;
 
       let candidate = baseUsername;
       let suffix = 1;
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
           displayName: name.slice(0, 50),
           avatarColor:
             AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
-          countryCode: "TR",
+          countryCode: "US",
         },
       });
     } else if (!user.googleId) {

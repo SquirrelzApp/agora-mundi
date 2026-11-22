@@ -1,7 +1,5 @@
-// Agora Mundi Prisma Schema
-// Not: Varsayılan olarak sıfır kurulumlu SQLite ile çalışır (VPS / Railway / Docker / Yerel).
-// Ücretsiz Bulut PostgreSQL'e (Neon / Supabase) geçmek için yalnızca aşağıdaki provider satırını
-// `provider = "postgresql"` yapıp .env içindeki DATABASE_URL değerini değiştirmeniz yeterlidir.
+// globeTake (Agora Mundi) Prisma Schema
+// Production database: PostgreSQL (Supabase / Neon) with connection pooling.
 
 generator client {
   provider = "prisma-client-js"
@@ -21,9 +19,9 @@ model User {
   googleId         String?   @unique
   avatarColor      String    @default("#1D3557")
   displayName      String
-  title            String    @default("Küresel Gündem Yorumcusu")
+  title            String    @default("Global Affairs Commentator")
   bio              String    @default("")
-  countryCode      String    @default("TR")
+  countryCode      String    @default("US")
   totalLikes       Int       @default(0)
   weeklyLikes      Int       @default(0)
   followerCount    Int       @default(0)
@@ -52,9 +50,8 @@ model Session {
 
 model Country {
   code                String       @id
-  nameTr              String
-  nameEn              String       @default("")
-  officialNameTr      String?
+  name                String
+  officialName        String?
   capital             String?
   region              String
   subregion           String?
@@ -66,11 +63,10 @@ model Country {
   currencySymbol      String?
   languagesJson       String?      // JSON string array of languages
   callingCode         String?
-  summaryTr           String?      // Wikipedia real country overview
+  summary             String?      // English Wikipedia country overview
   wikiUrl             String?
   thumbnailUrl        String?
   usdRate             Float?       // 1 USD = X local currency
-  tryRate             Float?       // 1 local currency = Y TRY
   tempo               String       // "HOT" | "MODERATE" | "STABLE"
   updateIntervalHours Int
   mapX                Float        // Longitude
@@ -88,7 +84,7 @@ model AgendaItem {
   slot         String    // "A" | "B" | "C"
   title        String
   summary      String    @default("")
-  category     String    @default("GÜNDEM")
+  category     String    @default("WORLD")
   sourcesJson  String    @default("[]") // JSON array of { title, publisher, url, publishedAt }
   sourceOrigin String    @default("LIVE_RSS_CURATED") // "GEMINI_GROUNDED" | "LIVE_RSS_CURATED"
   isActive     Boolean   @default(true)
@@ -110,8 +106,8 @@ model Comment {
   parentId       String?
   content        String
   sourceUrl      String?
-  stanceTag      String     @default("YORUM") // "YORUM" | "TEZ" | "ANALIZ" | "COZUM" | "ELESTIRI"
-  languageCode   String     @default("tr")
+  stanceTag      String     @default("COMMENT") // "COMMENT" | "THESIS" | "ANALYSIS" | "SOLUTION" | "CRITIQUE"
+  languageCode   String     @default("en")
   likeCount      Int        @default(0)
   replyCount     Int        @default(0)
   aiQualityScore Int        @default(80)
