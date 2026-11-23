@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { enqueueBackgroundCountrySync } from "@/lib/news-scheduler";
 import { getCurrentUser } from "@/lib/auth";
+import {
+  ensureAgendaTranslations,
+  getCachedAgendaTranslations,
+} from "@/lib/agenda-translator";
+import { normalizeLanguageCode } from "@/lib/language-config";
+import { getClientIp } from "@/lib/request-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -21,12 +27,15 @@ export async function GET(
   try {
     const code = params.code.toUpperCase();
     const sort = request.nextUrl.searchParams.get("sort") || "likes";
+    const targetLang = normalizeLanguageCode(
+      request.nextUrl.searchParams.get("lang") ||
+        request.cookies.get("globetake_lang")?.value ||
+        "en"
+    );
 
     const viewer = await getCurrentUser();
 
-    // PURE INSTANT DATABASE READ (< 5ms):
-    // News & Gemini 3.5 formatting run strictly in the background scheduler,
-    // NEVER blocking user clicks on the website.
+    // Instant database read; background scheduler keeps source feeds fresh.
     const country = await prisma.country.findUnique({
       where: { code },
       include: {
@@ -127,7 +136,7 @@ export async function GET(
       }
     }
 
-    const archivedAgendas = await prisma.agendaItem.findMany({
+    const archivedAgendasRaw = await prisma.agendaItem.findMany({
       where: { countryCode: code, isActive: false },
       orderBy: { archivedAt: "desc" },
       take: 6,
@@ -141,48 +150,74 @@ export async function GET(
       },
     });
 
+    const clientIp = getClientIp(request);
+    const [activeTranslations, archivedTranslations] = await Promise.all([
+      ensureAgendaTranslations(
+        country.agendas.map((ag) => ({
+          id: ag.id,
+          title: ag.title,
+          summary: ag.summary,
+        })),
+        targetLang,
+        { rateLimitKey: `agenda-tr:${clientIp}` }
+      ),
+      getCachedAgendaTranslations(
+        archivedAgendasRaw.map((ag) => ag.id),
+        targetLang
+      ),
+    ]);
+
+    const archivedAgendas = archivedAgendasRaw.map((ag) => {
+      const tr = archivedTranslations.get(ag.id);
+      return tr ? { ...ag, title: tr.title } : ag;
+    });
+
     const formattedCountry = {
       ...country,
       languages: safeParseJson<string[]>(country.languagesJson, []),
-      agendas: country.agendas.map((ag) => ({
-        id: ag.id,
-        slot: ag.slot,
-        title: ag.title,
-        summary: ag.summary,
-        category: ag.category,
-        sourceOrigin: ag.sourceOrigin,
-        publishedAt: ag.publishedAt,
-        commentCount: ag.commentCount,
-        sources: safeParseJson<
-          Array<{
-            title: string;
-            publisher: string;
-            url: string;
-            publishedAt: string;
-          }>
-        >(ag.sourcesJson, []),
-        comments: ag.comments.map((c) => ({
-          ...c,
-          viewerHasLiked: likedSet.has(c.id),
-          author: {
-            ...c.author,
-            viewerIsFollowing: followedSet.has(c.author.id),
-          },
-          replies: c.replies.map((r) => ({
-            ...r,
-            viewerHasLiked: likedSet.has(r.id),
+      agendas: country.agendas.map((ag) => {
+        const tr = activeTranslations.get(ag.id);
+        return {
+          id: ag.id,
+          slot: ag.slot,
+          title: tr?.title ?? ag.title,
+          summary: tr?.summary ?? ag.summary,
+          category: ag.category,
+          sourceOrigin: ag.sourceOrigin,
+          publishedAt: ag.publishedAt,
+          commentCount: ag.commentCount,
+          sources: safeParseJson<
+            Array<{
+              title: string;
+              publisher: string;
+              url: string;
+              publishedAt: string;
+            }>
+          >(ag.sourcesJson, []),
+          comments: ag.comments.map((c) => ({
+            ...c,
+            viewerHasLiked: likedSet.has(c.id),
             author: {
-              ...r.author,
-              viewerIsFollowing: followedSet.has(r.author.id),
+              ...c.author,
+              viewerIsFollowing: followedSet.has(c.author.id),
             },
+            replies: c.replies.map((r) => ({
+              ...r,
+              viewerHasLiked: likedSet.has(r.id),
+              author: {
+                ...r.author,
+                viewerIsFollowing: followedSet.has(r.author.id),
+              },
+            })),
           })),
-        })),
-      })),
+        };
+      }),
     };
 
     return NextResponse.json({
       country: formattedCountry,
       archivedAgendas,
+      lang: targetLang,
     });
   } catch (error) {
     console.error("GET /api/countries/[code] error:", error);

@@ -21,6 +21,15 @@ import { getAllWorldCountries } from "../src/lib/world-countries";
 import { getSchedulerStatusSnapshot } from "../src/lib/news-scheduler";
 import { resolveDistinctClusterMatches } from "../src/lib/ai-agenda-curator";
 import { checkRateLimit, verifyCronSecretToken } from "../src/lib/request-guard";
+import {
+  countryCodeToLanguage,
+  normalizeLanguageCode,
+} from "../src/lib/language-config";
+import {
+  detectVisitorLocale,
+  isPrivateOrLocalIp,
+  parseAcceptLanguage,
+} from "../src/lib/geo-language";
 
 describe("World Countries Catalog (English)", () => {
   it("loads ~174 world countries in English with capitals, currencies, and coordinates", () => {
@@ -244,5 +253,58 @@ describe("Production Hardening: Deduplication, Categories & Request Guards", () 
     assert.equal(verifyCronSecretToken(null, undefined, false).ok, true);
     assert.equal(verifyCronSecretToken("wrong", "supersecret", true).ok, false);
     assert.equal(verifyCronSecretToken("supersecret", "supersecret", true).ok, true);
+  });
+});
+
+describe("IP Region Detection & Language Localization", () => {
+  it("normalizes BCP-47 language codes and maps world countries accurately", () => {
+    assert.equal(normalizeLanguageCode("tr-TR"), "tr");
+    assert.equal(normalizeLanguageCode("zh_Hant_TW"), "zh-TW");
+    assert.equal(normalizeLanguageCode("zh-CN"), "zh-CN");
+    assert.equal(normalizeLanguageCode("iw"), "he");
+    assert.equal(normalizeLanguageCode("invalid!!!"), "en");
+
+    assert.equal(countryCodeToLanguage("TR"), "tr");
+    assert.equal(countryCodeToLanguage("DE"), "de");
+    assert.equal(countryCodeToLanguage("JP"), "ja");
+    assert.equal(countryCodeToLanguage("BR"), "pt");
+    assert.equal(countryCodeToLanguage("CA", ["fr", "en"]), "fr");
+    assert.equal(countryCodeToLanguage("CH", ["it", "en"]), "it");
+  });
+
+  it("identifies private/local IPs and resolves geo headers or Accept-Language", async () => {
+    assert.equal(isPrivateOrLocalIp("127.0.0.1"), true);
+    assert.equal(isPrivateOrLocalIp("192.168.1.25"), true);
+    assert.equal(isPrivateOrLocalIp("::1"), true);
+    assert.equal(isPrivateOrLocalIp("8.8.8.8"), false);
+
+    assert.deepEqual(
+      parseAcceptLanguage("tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"),
+      ["tr", "en"]
+    );
+
+    const vercelTrHeaders = new Headers({
+      "x-vercel-ip-country": "TR",
+      "accept-language": "en-US,en;q=0.9",
+    });
+    const trRes = await detectVisitorLocale(vercelTrHeaders);
+    assert.equal(trRes.lang, "tr");
+    assert.equal(trRes.countryCode, "TR");
+    assert.equal(trRes.source, "geo-header");
+
+    const cfDeHeaders = new Headers({
+      "cf-ipcountry": "DE",
+    });
+    const deRes = await detectVisitorLocale(cfDeHeaders);
+    assert.equal(deRes.lang, "de");
+    assert.equal(deRes.countryCode, "DE");
+
+    const localFallbackHeaders = new Headers({
+      "x-forwarded-for": "127.0.0.1",
+      "accept-language": "fr-FR,fr;q=0.9",
+    });
+    const localRes = await detectVisitorLocale(localFallbackHeaders);
+    assert.equal(localRes.lang, "fr");
+    assert.equal(localRes.source, "accept-language");
   });
 });

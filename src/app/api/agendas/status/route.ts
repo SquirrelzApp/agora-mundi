@@ -5,15 +5,21 @@ import { getSchedulerStatusSnapshot } from "@/lib/news-scheduler";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const [totalCountries, syncedCountries, activeAgendas, geminiAgendas] =
-    await Promise.all([
-      prisma.country.count(),
-      prisma.country.count({ where: { lastSyncedAt: { not: null } } }),
-      prisma.agendaItem.count({ where: { isActive: true } }),
-      prisma.agendaItem.count({
-        where: { isActive: true, sourceOrigin: "GEMINI_GROUNDED" },
-      }),
-    ]);
+  const [
+    totalCountries,
+    syncedCountries,
+    activeAgendas,
+    curatedAgendas,
+    cachedTranslations,
+  ] = await Promise.all([
+    prisma.country.count(),
+    prisma.country.count({ where: { lastSyncedAt: { not: null } } }),
+    prisma.agendaItem.count({ where: { isActive: true } }),
+    prisma.agendaItem.count({
+      where: { isActive: true, sourceOrigin: "GEMINI_GROUNDED" },
+    }),
+    prisma.agendaTranslation.count(),
+  ]);
 
   return NextResponse.json({
     scheduler: getSchedulerStatusSnapshot(),
@@ -21,7 +27,8 @@ export async function GET() {
       totalCountries,
       syncedCountries,
       activeAgendas,
-      geminiAgendas,
+      curatedAgendas,
+      cachedTranslations,
     },
   });
 }

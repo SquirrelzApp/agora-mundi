@@ -1,4 +1,4 @@
-name: Hourly Global News & Gemini 3.5 Sync
+name: Hourly Global News Sync
 
 on:
   schedule:
@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run scheduled English RSS + Gemini 3.5 agenda sync
+      - name: Run scheduled live news agenda sync
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}

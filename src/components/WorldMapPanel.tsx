@@ -1289,7 +1289,10 @@ export default function WorldMapPanel({
                   </span>
                 </div>
                 {hoveredCountry.agendas?.[0]?.title && (
-                  <p className="mt-1.5 text-xs text-ink/90 line-clamp-1 font-medium">
+                  <p
+                    dir="auto"
+                    className="mt-1.5 text-xs text-ink/90 line-clamp-1 font-medium"
+                  >
                     • {hoveredCountry.agendas[0].title}
                   </p>
                 )}

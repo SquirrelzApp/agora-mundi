@@ -1,11 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAllWorldCountries } from "@/lib/world-countries";
+import { getCachedAgendaTranslations } from "@/lib/agenda-translator";
+import { normalizeLanguageCode } from "@/lib/language-config";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const targetLang = normalizeLanguageCode(
+      request.nextUrl.searchParams.get("lang") ||
+        request.cookies.get("globetake_lang")?.value ||
+        "en"
+    );
+
     let count = await prisma.country.count();
 
     // Auto-initialize country catalog if DB is brand new
@@ -56,7 +64,29 @@ export async function GET() {
       orderBy: { name: "asc" },
     });
 
-    return NextResponse.json({ countries, total: count });
+    if (targetLang === "en") {
+      return NextResponse.json({ countries, total: count, lang: targetLang });
+    }
+
+    const activeAgendaIds = countries.flatMap((c) => c.agendas.map((a) => a.id));
+    const cachedMap = await getCachedAgendaTranslations(
+      activeAgendaIds,
+      targetLang
+    );
+
+    const localizedCountries = countries.map((c) => ({
+      ...c,
+      agendas: c.agendas.map((a) => {
+        const tr = cachedMap.get(a.id);
+        return tr ? { ...a, title: tr.title } : a;
+      }),
+    }));
+
+    return NextResponse.json({
+      countries: localizedCountries,
+      total: count,
+      lang: targetLang,
+    });
   } catch (error) {
     console.error("GET /api/countries error:", error);
     return NextResponse.json(

@@ -5,9 +5,19 @@ const globalForPrisma = globalThis as unknown as {
   sqliteWalInitialized?: boolean;
 };
 
+function getDatabaseUrl(): string | undefined {
+  const url = process.env.DATABASE_URL;
+  if (!url || !/^postgres(ql)?:\/\//i.test(url)) return undefined;
+  if (/[?&]connect_timeout=/i.test(url)) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}connect_timeout=15`;
+}
+
+const datasourceUrl = getDatabaseUrl();
+
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
+    ...(datasourceUrl ? { datasourceUrl } : {}),
     log: ["error"],
   });
 

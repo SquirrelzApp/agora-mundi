@@ -19,7 +19,7 @@ async function waitForDatabase(maxAttempts = 3): Promise<void> {
 
 async function main() {
   const t0 = Date.now();
-  console.log("[cron-sync] Starting scheduled English news & Gemini 3.5 cycle...");
+  console.log("[cron-sync] Starting scheduled live news curation cycle...");
 
   await waitForDatabase(3);
   const updated = await runSchedulerCycle(55);

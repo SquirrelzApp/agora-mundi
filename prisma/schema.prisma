@@ -93,10 +93,25 @@ model AgendaItem {
   createdAt    DateTime  @default(now())
   archivedAt   DateTime?
 
-  country      Country   @relation(fields: [countryCode], references: [code], onDelete: Cascade)
+  country      Country             @relation(fields: [countryCode], references: [code], onDelete: Cascade)
   comments     Comment[]
+  translations AgendaTranslation[]
 
   @@index([countryCode, isActive])
+}
+
+model AgendaTranslation {
+  id           String     @id @default(cuid())
+  agendaItemId String
+  languageCode String
+  title        String
+  summary      String     @default("")
+  createdAt    DateTime   @default(now())
+
+  agendaItem   AgendaItem @relation(fields: [agendaItemId], references: [id], onDelete: Cascade)
+
+  @@unique([agendaItemId, languageCode])
+  @@index([languageCode])
 }
 
 model Comment {

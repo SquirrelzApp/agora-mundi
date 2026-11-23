@@ -25,6 +25,7 @@ import {
   Maximize2,
 } from "lucide-react";
 import type { AuthenticatedUser } from "@/components/AuthModal";
+import { WORLD_LANGUAGES } from "@/lib/language-config";
 
 export interface CommentReplyItem {
   id: string;
@@ -429,7 +430,7 @@ export default function CountryHub({
           <div className="flex items-center gap-2 shrink-0">
             <span
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-800 text-[11px] font-semibold"
-              title="News is automatically synthesized on the server with Gemini 3.5 and saved to the database"
+              title="News is automatically curated and updated on the server"
             >
               <Sparkles className="w-3.5 h-3.5 shrink-0" />
               <span>
@@ -570,10 +571,16 @@ export default function CountryHub({
             <h2 className="font-serif font-bold text-base sm:text-lg text-ink">
               Top 3 Live Agendas
             </h2>
+            {loading && (
+              <RefreshCw
+                className="w-3.5 h-3.5 text-authority animate-spin"
+                aria-label="Updating language"
+              />
+            )}
           </div>
           <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-800 font-semibold">
             {country.agendas.some((a) => a.sourceOrigin === "GEMINI_GROUNDED")
-              ? "Gemini 3.5 + Live Press"
+              ? "Curated Press Feed"
               : "Live Press Feed"}
           </span>
         </div>
@@ -641,7 +648,10 @@ export default function CountryHub({
                           )}
                         </div>
 
-                        <h3 className="font-serif text-sm sm:text-base font-bold text-ink leading-snug">
+                        <h3
+                          dir="auto"
+                          className="font-serif text-sm sm:text-base font-bold text-ink leading-snug"
+                        >
                           {agenda.title}
                         </h3>
                       </div>
@@ -651,7 +661,7 @@ export default function CountryHub({
                   {/* Context Summary & Real Source Pills */}
                   {agenda.summary && (
                     <div className="pl-11 space-y-2">
-                      <p className="text-xs text-slate leading-relaxed">
+                      <p dir="auto" className="text-xs text-slate leading-relaxed">
                         {agenda.summary}
                       </p>
 
@@ -728,15 +738,14 @@ export default function CountryHub({
                           onChange={(e) =>
                             onChangeTranslateLang(e.target.value)
                           }
-                          className="px-2.5 py-1 bg-gray-100 rounded-full text-[11px] font-semibold text-ink focus:outline-none cursor-pointer"
+                          className="px-2.5 py-1 bg-gray-100 rounded-full text-[11px] font-semibold text-ink focus:outline-none cursor-pointer max-w-[160px]"
                           title="Target language for comment translation"
                         >
-                          <option value="en">Translate: EN</option>
-                          <option value="tr">Translate: TR</option>
-                          <option value="de">Translate: DE</option>
-                          <option value="fr">Translate: FR</option>
-                          <option value="ru">Translate: RU</option>
-                          <option value="ar">Translate: AR</option>
+                          {WORLD_LANGUAGES.map((l) => (
+                            <option key={l.code} value={l.code}>
+                              Translate: {l.code.toUpperCase()} ({l.nativeName})
+                            </option>
+                          ))}
                         </select>
 
                         <div className="flex items-center p-0.5 rounded-full text-xs bg-gray-100">
@@ -954,9 +963,12 @@ export default function CountryHub({
                               </p>
 
                               {trState && (
-                                <div className="p-3 bg-white rounded-2xl text-xs text-ink break-words">
+                                <div
+                                  dir="auto"
+                                  className="p-3 bg-white rounded-2xl text-xs text-ink break-words"
+                                >
                                   <span className="font-mono text-[10px] text-authority font-semibold uppercase block mb-0.5">
-                                    Google Translate (
+                                    Translation (
                                     {trState.targetLang.toUpperCase()})
                                   </span>
                                   {trState.loading

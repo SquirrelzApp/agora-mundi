@@ -34,7 +34,7 @@ async function main() {
     .map((c) => c.code);
 
   console.log(
-    `[sync-all] Need English Gemini 3.5 agenda ingestion for ${needAgendas.length}/${allCountries.length} countries...`
+    `[sync-all] Need English agenda ingestion for ${needAgendas.length}/${allCountries.length} countries...`
   );
 
   // Process 2 batches of 6 in parallel (12 countries concurrently) for fast, safe ingestion

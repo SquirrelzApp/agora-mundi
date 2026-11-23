@@ -44,7 +44,7 @@ function tempoPriority(tempo: string): number {
 /**
  * Single background ingestion cycle:
  * Fetches live English news for countries that are due or unsynced,
- * curates them via Gemini 3.5 Flash-Lite, and persists directly to PostgreSQL.
+ * curates them via the configured AI model, and persists directly to PostgreSQL.
  */
 export async function runSchedulerCycle(maxCountries = 50): Promise<number> {
   const state = getState();
@@ -159,7 +159,7 @@ export function startBackgroundNewsScheduler(): void {
   state.timer = timer;
 
   console.log(
-    `[globeTake] Autonomous English News & Gemini 3.5 scheduler active (tick: ${SCHEDULER_TICK_MINUTES}m | HOT: 1h, MODERATE: 3h, STABLE: 6h)`
+    `[globeTake] Autonomous Live News scheduler active (tick: ${SCHEDULER_TICK_MINUTES}m | HOT: 1h, MODERATE: 3h, STABLE: 6h)`
   );
 }
 

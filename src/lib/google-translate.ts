@@ -1,11 +1,17 @@
 /**
- * Google Translate Service (On-demand user comment translation utility)
- * Uses Google Translate endpoint directly when a reader requests translation of a foreign-language comment.
+ * Google Translate Service (On-demand translation utility & fallback)
  */
 export async function translateWithGoogle(
   text: string,
   targetLang: string = "en"
-): Promise<{ translatedText: string; detectedSourceLang: string }> {
+): Promise<{ translatedText: string; detectedSourceLang: string; ok: boolean }> {
+  if (!text || !text.trim()) {
+    return { translatedText: text, detectedSourceLang: "auto", ok: true };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+
   try {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(
       targetLang
@@ -16,6 +22,7 @@ export async function translateWithGoogle(
         "User-Agent": "Mozilla/5.0",
       },
       cache: "no-store",
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -26,20 +33,29 @@ export async function translateWithGoogle(
     // data[0] contains array of translated segments: [[translated, original, ...], ...]
     const translatedSegments: string[] = Array.isArray(data?.[0])
       ? data[0].map((seg: unknown[]) => (typeof seg?.[0] === "string" ? seg[0] : ""))
-      : [text];
+      : [];
+
+    const joined = translatedSegments.join("").trim();
+    if (!joined) {
+      throw new Error("Empty translation response");
+    }
 
     const detectedSourceLang =
       typeof data?.[2] === "string" ? data[2] : "auto";
 
     return {
-      translatedText: translatedSegments.join(""),
+      translatedText: joined,
       detectedSourceLang,
+      ok: true,
     };
   } catch (error) {
     console.warn("Google Translate API fallback:", error);
     return {
       translatedText: text,
       detectedSourceLang: "unknown",
+      ok: false,
     };
+  } finally {
+    clearTimeout(timer);
   }
 }

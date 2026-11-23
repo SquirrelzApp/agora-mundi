@@ -194,7 +194,10 @@ export default function LeaderboardSidebar({
                         {item.category}
                       </span>
                     </div>
-                    <p className="text-xs text-ink font-medium line-clamp-2 leading-snug">
+                    <p
+                      dir="auto"
+                      className="text-xs text-ink font-medium line-clamp-2 leading-snug"
+                    >
                       {item.title}
                     </p>
                   </button>
@@ -391,13 +394,13 @@ export default function LeaderboardSidebar({
             </div>
           )}
 
-          {/* Gemini 3.5 Moderation Shield */}
+          {/* Automated Moderation Shield */}
           {data && (
             <div className="p-3.5 bg-gray-100/75 rounded-2xl space-y-2.5 text-xs">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 font-bold text-ink">
                   <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                  <span>Gemini 3.5 Moderation</span>
+                  <span>AI Moderation</span>
                 </div>
                 <span className="text-[10px] font-mono px-2 py-0.5 bg-emerald-500/10 text-emerald-800 rounded-full font-semibold">
                   ACTIVE

@@ -177,7 +177,7 @@ async function callGeminiWithRetry<T>(
 }
 
 /**
- * Live English News Clusters + Gemini 3.5 Flash-Lite (if configured) / Zero-Key Live RSS Curator.
+ * Live English News Clusters + AI Curation (if configured) / Zero-Key Live RSS Curator.
  * Zero fabricated/hardcoded templates; 100% grounded in live English news sources.
  */
 export async function curateLiveCountryAgendas(
@@ -191,7 +191,7 @@ export async function curateLiveCountryAgendas(
 
   const apiKey = getNewsGeminiApiKey();
 
-  // 1. Gemini 3.5 Flash-Lite Grounded Synthesis (when API key is configured)
+  // 1. AI Grounded Synthesis (when API key is configured)
   if (apiKey) {
     try {
       const ai = new GoogleGenAI({ apiKey });
@@ -497,10 +497,10 @@ export async function syncCountryAgendasToDb(
 }
 
 /**
- * Background Batch News Fetching + Gemini 3.5 Curation Engine:
- * Live English RSS clusters are curated in a single batched Gemini 3.5 call into
+ * Background Batch News Fetching + AI Curation Engine:
+ * Live English RSS clusters are curated in a single batched AI call into
  * 3 distinct English agendas (A, B, C) and written directly to PostgreSQL so
- * user clicks on the site NEVER wait on Gemini.
+ * user clicks on the site NEVER wait on external LLM generation.
  */
 export async function syncBatchCountriesToDb(
   countryCodes: string[],
@@ -613,7 +613,7 @@ export async function syncBatchCountriesToDb(
 
     const apiKey = getNewsGeminiApiKey();
 
-    // 2. Single batched Gemini 3.5 call for all countries with rich RSS clusters
+    // 2. Single batched AI call for all countries with rich RSS clusters
     if (apiKey && richEntries.length > 0) {
       try {
         const ai = new GoogleGenAI({ apiKey });

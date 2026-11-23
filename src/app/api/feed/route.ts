@@ -1,10 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ensureAgendaTranslations } from "@/lib/agenda-translator";
+import { normalizeLanguageCode } from "@/lib/language-config";
+import { getClientIp } from "@/lib/request-guard";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const targetLang = normalizeLanguageCode(
+      request.nextUrl.searchParams.get("lang") ||
+        request.cookies.get("globetake_lang")?.value ||
+        "en"
+    );
     const [
       recentAgendasRaw,
       recentComments,
@@ -95,9 +103,27 @@ export async function GET() {
       if (diverseAgendas.length >= 12) break;
     }
 
+    const translations = await ensureAgendaTranslations(
+      diverseAgendas.map((ag) => ({
+        id: ag.id,
+        title: ag.title,
+        summary: ag.summary,
+      })),
+      targetLang,
+      { rateLimitKey: `agenda-tr:${getClientIp(request)}` }
+    );
+
+    const localizedAgendas = diverseAgendas.map((ag) => {
+      const tr = translations.get(ag.id);
+      return tr
+        ? { ...ag, title: tr.title, summary: tr.summary }
+        : ag;
+    });
+
     return NextResponse.json({
-      recentAgendas: diverseAgendas,
+      recentAgendas: localizedAgendas,
       recentComments,
+      lang: targetLang,
       stats: {
         totalCountries,
         syncedCountriesCount,

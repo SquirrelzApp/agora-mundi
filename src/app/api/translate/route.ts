@@ -1,24 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { translateWithGoogle } from "@/lib/google-translate";
+import { normalizeLanguageCode } from "@/lib/language-config";
 import { checkRateLimit, getClientIp } from "@/lib/request-guard";
 
 const MAX_TRANSLATE_CHARS = 1500;
-const ALLOWED_TARGET_LANGS = new Set([
-  "en",
-  "tr",
-  "es",
-  "fr",
-  "de",
-  "ar",
-  "ru",
-  "zh",
-  "zh-CN",
-  "ja",
-  "pt",
-  "hi",
-  "ko",
-  "it",
-]);
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,14 +38,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const safeTargetLang =
-      typeof targetLang === "string" && ALLOWED_TARGET_LANGS.has(targetLang)
-        ? targetLang
-        : "en";
+    const safeTargetLang = normalizeLanguageCode(
+      typeof targetLang === "string" ? targetLang : "en"
+    );
 
     const result = await translateWithGoogle(text.trim(), safeTargetLang);
     return NextResponse.json({
-      provider: "Google Translate",
+      provider: "Translation",
       translatedText: result.translatedText,
       detectedSourceLang: result.detectedSourceLang,
       targetLang: safeTargetLang,
@@ -68,7 +52,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("POST /api/translate error:", error);
     return NextResponse.json(
-      { error: "Unable to reach Google Translate service." },
+      { error: "Unable to reach translation service." },
       { status: 500 }
     );
   }
