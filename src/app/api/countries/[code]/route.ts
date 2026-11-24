@@ -27,6 +27,8 @@ export async function GET(
   try {
     const code = params.code.toUpperCase();
     const sort = request.nextUrl.searchParams.get("sort") || "likes";
+    const requestedAgendaId =
+      request.nextUrl.searchParams.get("agendaId")?.trim() || null;
     const targetLang = normalizeLanguageCode(
       request.nextUrl.searchParams.get("lang") ||
         request.cookies.get("globetake_lang")?.value ||
@@ -34,6 +36,45 @@ export async function GET(
     );
 
     const viewer = await getCurrentUser();
+
+    const commentsInclude = {
+      where: { parentId: null },
+      orderBy:
+        sort === "recent"
+          ? { createdAt: "desc" as const }
+          : [{ likeCount: "desc" as const }, { createdAt: "desc" as const }],
+      include: {
+        author: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            title: true,
+            countryCode: true,
+            avatarColor: true,
+            followerCount: true,
+            weeklyLikes: true,
+          },
+        },
+        replies: {
+          orderBy: { createdAt: "asc" as const },
+          include: {
+            author: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                title: true,
+                countryCode: true,
+                avatarColor: true,
+                followerCount: true,
+                weeklyLikes: true,
+              },
+            },
+          },
+        },
+      },
+    };
 
     // Instant database read; background scheduler keeps source feeds fresh.
     const country = await prisma.country.findUnique({
@@ -43,44 +84,7 @@ export async function GET(
           where: { isActive: true },
           orderBy: { slot: "asc" },
           include: {
-            comments: {
-              where: { parentId: null },
-              orderBy:
-                sort === "recent"
-                  ? { createdAt: "desc" }
-                  : [{ likeCount: "desc" }, { createdAt: "desc" }],
-              include: {
-                author: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true,
-                    title: true,
-                    countryCode: true,
-                    avatarColor: true,
-                    followerCount: true,
-                    weeklyLikes: true,
-                  },
-                },
-                replies: {
-                  orderBy: { createdAt: "asc" },
-                  include: {
-                    author: {
-                      select: {
-                        id: true,
-                        username: true,
-                        displayName: true,
-                        title: true,
-                        countryCode: true,
-                        avatarColor: true,
-                        followerCount: true,
-                        weeklyLikes: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
+            comments: commentsInclude,
           },
         },
       },
@@ -88,6 +92,21 @@ export async function GET(
 
     if (!country) {
       return NextResponse.json({ error: "Country not found." }, { status: 404 });
+    }
+
+    if (
+      requestedAgendaId &&
+      !country.agendas.some((ag) => ag.id === requestedAgendaId)
+    ) {
+      const requestedAgenda = await prisma.agendaItem.findFirst({
+        where: { id: requestedAgendaId, countryCode: code },
+        include: {
+          comments: commentsInclude,
+        },
+      });
+      if (requestedAgenda) {
+        country.agendas.unshift(requestedAgenda);
+      }
     }
 
     if (country.agendas.length === 0) {

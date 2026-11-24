@@ -27,6 +27,7 @@ export interface PoliticalCvData {
       sourceUrl?: string | null;
       createdAt: string;
       agendaItem: {
+        id: string;
         slot: string;
         title: string;
         country: {
@@ -53,7 +54,7 @@ interface PoliticalCvModalProps {
   onClose: () => void;
   onFollow: (username: string) => void;
   onEditOwnProfile?: () => void;
-  onJumpToCountry?: (countryCode: string, slot: string) => void;
+  onJumpToCountry?: (countryCode: string, slot: string, agendaId?: string) => void;
 }
 
 export default function PoliticalCvModal({
@@ -234,30 +235,34 @@ export default function PoliticalCvModal({
                     key={c.id}
                     className="p-4 bg-gray-100/60 rounded-2xl space-y-1.5"
                   >
-                    <div className="flex items-center justify-between gap-2 text-xs">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="font-semibold text-authority">
+                          {c.agendaItem.country.flagEmoji}{" "}
+                          {c.agendaItem.country.name}
+                        </span>
+                        <span className="inline-flex items-center gap-1 font-mono font-bold text-ink shrink-0">
+                          <ThumbsUp className="w-3 h-3 text-authority" />
+                          {c.likeCount}
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
                           if (onJumpToCountry) {
                             onJumpToCountry(
                               c.agendaItem.country.code,
-                              c.agendaItem.slot
+                              c.agendaItem.slot,
+                              c.agendaItem.id
                             );
                             onClose();
                           }
                         }}
-                        className="font-semibold text-authority hover:underline text-left truncate"
+                        dir="auto"
+                        className="block w-full text-left text-xs font-medium text-slate hover:text-authority hover:underline leading-snug break-words transition"
                       >
-                        {c.agendaItem.country.flagEmoji}{" "}
-                        {c.agendaItem.country.name} —{" "}
-                        <span className="font-normal text-slate">
-                          {c.agendaItem.title}
-                        </span>
+                        {c.agendaItem.title}
                       </button>
-                      <span className="inline-flex items-center gap-1 font-mono font-bold text-ink shrink-0">
-                        <ThumbsUp className="w-3 h-3 text-authority" />
-                        {c.likeCount}
-                      </span>
                     </div>
                     <p className="text-sm text-ink leading-relaxed">
                       {c.content}

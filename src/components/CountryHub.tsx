@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   RefreshCw,
   ThumbsUp,
@@ -103,6 +103,12 @@ interface CountryHubProps {
   country: CountryDetail | null;
   loading: boolean;
   selectedSlot: string;
+  focusAgenda?: {
+    countryCode: string;
+    slot: string;
+    agendaId?: string;
+    nonce: number;
+  } | null;
   onSelectSlot: (slot: string) => void;
   commentSort: "likes" | "recent";
   onChangeSort: (sort: "likes" | "recent") => void;
@@ -174,6 +180,7 @@ export default function CountryHub({
   country,
   loading,
   selectedSlot,
+  focusAgenda,
   onSelectSlot,
   commentSort,
   onChangeSort,
@@ -188,7 +195,9 @@ export default function CountryHub({
   onCommentCreated,
 }: CountryHubProps) {
   const [wikiExpanded, setWikiExpanded] = useState<boolean>(false);
-  const [expandedSlot, setExpandedSlot] = useState<string | null>(null);
+  const [expandedAgendaId, setExpandedAgendaId] = useState<string | null>(null);
+  const agendaRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const handledFocusNonceRef = useRef<number | null>(null);
 
   // Root comment composer state
   const [commentText, setCommentText] = useState<string>("");
@@ -212,11 +221,41 @@ export default function CountryHub({
   >({});
 
   useEffect(() => {
-    setExpandedSlot(null);
+    if (!focusAgenda || focusAgenda.countryCode !== country?.code) {
+      setExpandedAgendaId(null);
+    }
     setFeedback(null);
     setReplyingToId(null);
     setReplyText("");
-  }, [country?.code]);
+  }, [country?.code, focusAgenda]);
+
+  useEffect(() => {
+    if (!focusAgenda || !country || country.code !== focusAgenda.countryCode) {
+      return;
+    }
+    if (handledFocusNonceRef.current === focusAgenda.nonce) {
+      return;
+    }
+
+    const match =
+      (focusAgenda.agendaId
+        ? country.agendas.find((ag) => ag.id === focusAgenda.agendaId)
+        : undefined) ||
+      country.agendas.find((ag) => ag.slot === focusAgenda.slot);
+
+    if (!match) return;
+
+    handledFocusNonceRef.current = focusAgenda.nonce;
+    setExpandedAgendaId(match.id);
+    onSelectSlot(match.slot);
+
+    requestAnimationFrame(() => {
+      const el = agendaRefs.current[match.id];
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }, [focusAgenda, country, onSelectSlot]);
 
   if (loading && !country) {
     return (
@@ -587,12 +626,12 @@ export default function CountryHub({
 
         <div className="grid grid-cols-1 gap-3">
           {country.agendas.map((agenda) => {
-            const isExpanded = expandedSlot === agenda.slot;
+            const isExpanded = expandedAgendaId === agenda.id;
             const toggleExpand = () => {
               if (isExpanded) {
-                setExpandedSlot(null);
+                setExpandedAgendaId(null);
               } else {
-                setExpandedSlot(agenda.slot);
+                setExpandedAgendaId(agenda.id);
                 onSelectSlot(agenda.slot);
               }
               setFeedback(null);
@@ -602,7 +641,10 @@ export default function CountryHub({
             return (
               <div
                 key={agenda.id}
-                className={`w-full text-left p-4 sm:p-5 rounded-3xl transition-all space-y-2.5 ${
+                ref={(el) => {
+                  agendaRefs.current[agenda.id] = el;
+                }}
+                className={`w-full text-left p-4 sm:p-5 rounded-3xl transition-all space-y-2.5 scroll-mt-20 ${
                   isExpanded
                     ? "bg-white shadow-[0_14px_38px_rgba(29,53,87,0.12)] ring-2 ring-authority/30"
                     : "bg-white/85 hover:bg-white shadow-[0_2px_12px_rgb(0,0,0,0.03)]"

@@ -63,6 +63,12 @@ export default function GlobeTakeApp({ initialLocale }: GlobeTakeAppProps) {
   const [countries, setCountries] = useState<CountrySummary[]>([]);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string>("A");
+  const [focusAgenda, setFocusAgenda] = useState<{
+    countryCode: string;
+    slot: string;
+    agendaId?: string;
+    nonce: number;
+  } | null>(null);
   const [countryDetail, setCountryDetail] = useState<CountryDetail | null>(
     null
   );
@@ -274,9 +280,10 @@ export default function GlobeTakeApp({ initialLocale }: GlobeTakeAppProps) {
       code: string,
       sort: "likes" | "recent",
       lang: string,
-      bypassCache = false
+      bypassCache = false,
+      agendaId?: string
     ) => {
-      const cacheKey = `${code}:${sort}:${lang}`;
+      const cacheKey = `${code}:${sort}:${lang}:${agendaId || ""}`;
       const cached = !bypassCache
         ? countryCacheRef.current.get(cacheKey)
         : undefined;
@@ -288,8 +295,11 @@ export default function GlobeTakeApp({ initialLocale }: GlobeTakeAppProps) {
       }
 
       try {
+        const agendaParam = agendaId
+          ? `&agendaId=${encodeURIComponent(agendaId)}`
+          : "";
         const res = await fetch(
-          `/api/countries/${code}?sort=${sort}&lang=${encodeURIComponent(lang)}`
+          `/api/countries/${code}?sort=${sort}&lang=${encodeURIComponent(lang)}${agendaParam}`
         );
         if (res.ok) {
           const data = await res.json();
@@ -353,16 +363,32 @@ export default function GlobeTakeApp({ initialLocale }: GlobeTakeAppProps) {
       setCountryDetail(null);
       return;
     }
+    const targetAgendaId =
+      focusAgenda?.countryCode === selectedCode
+        ? focusAgenda.agendaId
+        : undefined;
     const cached = countryCacheRef.current.get(
-      `${selectedCode}:${commentSort}:${activeLanguage}`
+      `${selectedCode}:${commentSort}:${activeLanguage}:${targetAgendaId || ""}`
     );
     if (cached) {
       setCountryDetail(cached);
     } else {
       setCountryDetail((prev) => (prev?.code === selectedCode ? prev : null));
     }
-    void fetchCountryDetail(selectedCode, commentSort, activeLanguage);
-  }, [selectedCode, commentSort, activeLanguage, fetchCountryDetail]);
+    void fetchCountryDetail(
+      selectedCode,
+      commentSort,
+      activeLanguage,
+      false,
+      targetAgendaId
+    );
+  }, [
+    selectedCode,
+    commentSort,
+    activeLanguage,
+    focusAgenda,
+    fetchCountryDetail,
+  ]);
 
   // Sync URL query params cleanly without page reload
   useEffect(() => {
@@ -381,9 +407,23 @@ export default function GlobeTakeApp({ initialLocale }: GlobeTakeAppProps) {
     }
   }, [selectedCode, selectedSlot]);
 
-  const handleSelectCountry = (code: string | null, slot = "A") => {
-    if (code && window.scrollY > 120) {
-      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  const handleSelectCountry = (
+    code: string | null,
+    slot = "A",
+    options?: { expand?: boolean; agendaId?: string }
+  ) => {
+    if (code && options?.expand) {
+      setFocusAgenda({
+        countryCode: code,
+        slot,
+        agendaId: options.agendaId,
+        nonce: Date.now(),
+      });
+    } else {
+      setFocusAgenda(null);
+      if (code && window.scrollY > 120) {
+        window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+      }
     }
     setSelectedCode(code);
     setSelectedSlot(slot);
@@ -621,6 +661,7 @@ export default function GlobeTakeApp({ initialLocale }: GlobeTakeAppProps) {
                 country={countryDetail}
                 loading={loadingCountry}
                 selectedSlot={selectedSlot}
+                focusAgenda={focusAgenda}
                 onSelectSlot={setSelectedSlot}
                 commentSort={commentSort}
                 onChangeSort={setCommentSort}
@@ -666,7 +707,7 @@ export default function GlobeTakeApp({ initialLocale }: GlobeTakeAppProps) {
               defaultView={mobileTab === "ranking" ? "ranking" : "pulse"}
               onOpenUserCv={handleOpenUserCv}
               onSelectCountryAndSlot={(code, slot) =>
-                handleSelectCountry(code, slot)
+                handleSelectCountry(code, slot, { expand: true })
               }
             />
           </div>
@@ -766,7 +807,9 @@ export default function GlobeTakeApp({ initialLocale }: GlobeTakeAppProps) {
           setAuthContextHint(null);
           setAuthModalMode("profile");
         }}
-        onJumpToCountry={(code, slot) => handleSelectCountry(code, slot)}
+        onJumpToCountry={(code, slot, agendaId) =>
+          handleSelectCountry(code, slot, { expand: true, agendaId })
+        }
       />
     </div>
   );
